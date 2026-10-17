@@ -1,0 +1,15 @@
+# Pinned so every member installs the same versions. Python 3.11+.
+Django==5.2.18
+SQLAlchemy==2.1.5
+psycopg[binary]==3.3.6
+PyMySQL==1.2.3
+sqlglot==30.23.0
+google-genai==2.31.0
+cryptography==50.0.2
+python-dotenv==1.2.4
+dj-database-url==3.1.2
+pytest==9.1.1
+pytest-django==4.14.0
+PyYAML==6.0.3
+
+# Stretch (schema linking), install only if built: sentence-transformers, numpy

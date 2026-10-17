@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{# Owner: Fouzan. Context: core/sample_context.py ask().
+   States: ?state=answered|corrected|blocked|failed|cannot_answer|unavailable (default: no question yet) #}
+{% block title %}Ask · SafeQuery{% endblock %}
+{% block content %}
+<h1>Ask: {{ connection.name }}</h1>
+<p>Placeholder page (Phase 1).</p>
+
+<form method="post">{% csrf_token %}{{ form.as_p }}<button>Ask</button></form>
+
+{% if result %}
+  <p>Outcome: {{ result.outcome }} · attempts: {{ result.attempt_count }}</p>
+  {% if result.outcome == "blocked" %}
+    <ul>{% for hit in result.block_hits %}<li>{{ hit.rule_id }} {{ hit.rule_name }}: {{ hit.message }}</li>{% endfor %}</ul>
+  {% elif result.outcome == "failed" %}
+    <p>{{ result.message }}</p>
+  {% else %}
+    <p>{{ result.explanation }}</p>
+    <pre>{{ result.sql }}</pre>
+    <p>{{ result.rows|length }} rows</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

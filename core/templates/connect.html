@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{# Owner: Fouzan. Context: core/sample_context.py connect(). States: ?state=empty|success|refused|error #}
+{% block title %}Connect · SafeQuery{% endblock %}
+{% block content %}
+<h1>Connect</h1>
+<p>Placeholder page (Phase 1).</p>
+
+{% if check %}<p>{{ check.message }}</p>{% endif %}
+
+<form method="post">{% csrf_token %}{{ form.as_p }}<button>Connect</button></form>
+
+<h2>Saved connections</h2>
+<ul>
+  {% for c in connections %}
+    <li>{{ c.name }} ({{ c.dialect }}) — <a href="{% url 'schema' c.id %}">schema</a> · <a href="{% url 'ask' c.id %}">ask</a></li>
+  {% empty %}
+    <li>No connections yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

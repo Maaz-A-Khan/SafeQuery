@@ -1,0 +1,10 @@
+# Correctness benchmark (Phase 7, Maaz). 30 questions: 10 easy, 10 medium, 10 hard.
+# reference_sql is PostgreSQL Chinook (snake_case tables: track, invoice_line, ...).
+# Run every reference query once to confirm it before adding it.
+# A question is correct when the agent's rows equal the reference rows, compared as sorted rows.
+
+questions:
+  - id: E01
+    tier: easy            # easy | medium | hard
+    question: How many tracks are there?
+    reference_sql: SELECT COUNT(*) FROM track

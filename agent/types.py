@@ -1,0 +1,225 @@
+"""Shared data types: the fixed interfaces between team members.
+
+Everything that crosses a module boundary is defined here, so the validator
+(Afraz), audit log (Sunil), templates (Fouzan) and pipeline (Maaz) agree on
+field names before anyone writes logic. Change a field here only after the
+whole team agrees.
+
+No Django imports in `agent/` (NFR-M2).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import asdict, dataclass, field
+from enum import StrEnum
+from typing import Protocol
+
+
+class Dialect(StrEnum):
+    POSTGRESQL = "postgresql"
+    MYSQL = "mysql"
+    SQLITE = "sqlite"
+
+
+# --- Schema -----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Column:
+    name: str
+    type: str                          # as reported by the database, e.g. "VARCHAR(40)"
+    nullable: bool = True
+    primary_key: bool = False
+    sample_values: tuple[str, ...] = ()  # only for low-cardinality text columns (FR-C7)
+
+
+@dataclass(frozen=True)
+class ForeignKey:
+    columns: tuple[str, ...]
+    ref_table: str
+    ref_columns: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Table:
+    name: str
+    columns: tuple[Column, ...]
+    foreign_keys: tuple[ForeignKey, ...] = ()
+
+
+@dataclass
+class Schema:
+    """What the agent knows about a target database. Stored in `SchemaSnapshot`."""
+
+    dialect: Dialect
+    tables: dict[str, Table]
+    restricted: set[str] = field(default_factory=set)  # table names (R6)
+
+    def table_names(self) -> set[str]:
+        return set(self.tables)
+
+    def schema_hash(self) -> str:
+        """Changes whenever the structure changes, so cached SQL is never reused on
+        a different schema. The restricted list is excluded: cached SQL is
+        re-validated anyway, so R6 still applies."""
+        payload = json.dumps(
+            [asdict(self.tables[name]) for name in sorted(self.tables)], sort_keys=True
+        )
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    def to_json(self) -> dict:
+        """For `SchemaSnapshot.schema_json`. The restricted list is stored separately."""
+        data = {
+            "dialect": str(self.dialect),
+            "tables": [asdict(self.tables[name]) for name in sorted(self.tables)],
+        }
+        return json.loads(json.dumps(data))  # plain lists, exactly as the JSONField returns it
+
+    @classmethod
+    def from_json(cls, data: dict, restricted: list[str] | None = None) -> Schema:
+        tables = {}
+        for t in data["tables"]:
+            tables[t["name"]] = Table(
+                name=t["name"],
+                columns=tuple(
+                    Column(**{**c, "sample_values": tuple(c.get("sample_values", ()))})
+                    for c in t["columns"]
+                ),
+                foreign_keys=tuple(
+                    ForeignKey(tuple(fk["columns"]), fk["ref_table"], tuple(fk["ref_columns"]))
+                    for fk in t.get("foreign_keys", ())
+                ),
+            )
+        return cls(Dialect(data["dialect"]), tables, set(restricted or ()))
+
+
+# --- Validator --------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RuleHit:
+    """One rule that fired. `action` is "block" (stops the query) or "rewrite" (R11)."""
+
+    rule_id: str      # "R6"
+    rule_name: str    # "Restricted tables"
+    action: str       # "block" | "rewrite"
+    message: str      # plain-language explanation shown to the user (FR-V8)
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """Returned by `agent.validator.validate`."""
+
+    allowed: bool
+    sql: str                       # the SQL to execute: after R11's rewrite; the input SQL if blocked
+    hits: tuple[RuleHit, ...] = ()  # every rule that fired, blocking or rewriting
+
+    @property
+    def label(self) -> str:
+        return "ALLOW" if self.allowed else "BLOCK"
+
+    @property
+    def blocks(self) -> tuple[RuleHit, ...]:
+        return tuple(h for h in self.hits if h.action == "block")
+
+    @property
+    def rule_ids(self) -> list[str]:
+        return [h.rule_id for h in self.hits]
+
+
+# --- Pipeline result --------------------------------------------------------
+
+
+class Outcome(StrEnum):
+    ANSWERED = "answered"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+
+
+class StoppedBy(StrEnum):
+    """Who stopped the question. The evaluation reports this per attack prompt,
+    so a Gemini refusal is not counted as a validator block."""
+
+    NONE = "none"            # answered
+    MODEL = "model"          # Gemini returned sql = null ("can't answer from this schema")
+    VALIDATOR = "validator"  # a rule blocked it
+    DATABASE = "database"    # the database refused or errored on every attempt
+    SERVICE = "service"      # Gemini unavailable or over quota
+
+
+@dataclass
+class Attempt:
+    """One generate → validate → execute round. Stored in `QueryLog.attempts_json`."""
+
+    number: int                    # 1 to 3
+    sql: str | None                # as generated by Gemini; None if it declined
+    explanation: str = ""
+    verdict: Verdict | None = None  # None if nothing was generated
+    error: str | None = None       # database error text, if execution failed
+    exec_ms: int | None = None
+
+
+@dataclass
+class Result:
+    """Returned by the pipeline; rendered by the Ask page; written by `log_request`."""
+
+    question: str
+    outcome: Outcome
+    stopped_by: StoppedBy
+    message: str = ""                # user-facing text when blocked or failed
+    sql: str | None = None           # final SQL that ran (after R11)
+    explanation: str = ""            # Gemini's one-sentence explanation (FR-Q9)
+    columns: list[str] = field(default_factory=list)
+    rows: list[tuple] = field(default_factory=list)  # never stored (FR-L2)
+    truncated: bool = False          # True if the row cap cut the result
+    attempts: list[Attempt] = field(default_factory=list)
+    plan: list[str] = field(default_factory=list)    # sub-questions; empty for single-step
+    from_cache: bool = False
+    exec_ms: int | None = None
+
+    @property
+    def attempt_count(self) -> int:
+        return len(self.attempts)
+
+    @property
+    def rows_returned(self) -> int | None:
+        return len(self.rows) if self.outcome == Outcome.ANSWERED else None
+
+    @property
+    def rules_fired(self) -> list[str]:
+        """Rule IDs across all attempts, in first-seen order, e.g. ["R11"] or ["R3", "R4"]."""
+        seen: list[str] = []
+        for a in self.attempts:
+            for rule_id in a.verdict.rule_ids if a.verdict else []:
+                if rule_id not in seen:
+                    seen.append(rule_id)
+        return seen
+
+    @property
+    def block_hits(self) -> tuple[RuleHit, ...]:
+        """Blocking rules from the last attempt, for the red banner (FR-U4)."""
+        last = self.attempts[-1] if self.attempts else None
+        return last.verdict.blocks if last and last.verdict else ()
+
+
+# --- What the pipeline is given ---------------------------------------------
+
+
+@dataclass(frozen=True)
+class Target:
+    """A target database, resolved by `core` and handed to the Django-free agent."""
+
+    connection_id: int
+    dialect: Dialect
+    schema: Schema
+    url: str = field(repr=False)  # decrypted; repr=False keeps it out of logs and tracebacks
+
+
+class QueryCache(Protocol):
+    """Bound to one connection by `core.services`; implemented by `core.audit`."""
+
+    def lookup(self, question: str, schema_hash: str) -> str | None: ...
+
+    def save(self, question: str, schema_hash: str, sql: str) -> None: ...

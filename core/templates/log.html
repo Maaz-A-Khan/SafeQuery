@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{# Owner: Fouzan (template), Sunil (view). Context: core/sample_context.py log(). States: ?state=empty #}
+{% block title %}Log · SafeQuery{% endblock %}
+{% block content %}
+<h1>Log</h1>
+<p>Placeholder page (Phase 1).</p>
+<ul>
+  {% for e in entries %}
+    <li><a href="{% url 'log_detail' e.id %}">{{ e.created_at }}</a> · {{ e.verdict }} · {{ e.question }}</li>
+  {% empty %}
+    <li>No questions yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

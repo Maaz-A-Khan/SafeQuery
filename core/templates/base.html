@@ -1,0 +1,20 @@
+{% load static %}<!doctype html>
+{# Owner: Fouzan (Phase 4). Phase 1 placeholder: replace with the Bootstrap 5 layout. #}
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SafeQuery{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'core/style.css' %}">
+</head>
+<body>
+  <nav>
+    <a href="{% url 'connect' %}">Connect</a>
+    <a href="{% url 'log' %}">Log</a>
+    {% if user.is_authenticated %}
+      <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button>Log out</button></form>
+    {% endif %}
+  </nav>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{# Owner: Fouzan (template), Sunil (view). Context: core/sample_context.py log_detail() #}
+{% block title %}Log entry · SafeQuery{% endblock %}
+{% block content %}
+<h1>{{ entry.question }}</h1>
+<p>Placeholder page (Phase 1). Verdict: {{ entry.verdict }}.</p>
+<ol>
+  {% for a in entry.attempts %}
+    <li><pre>{{ a.sql }}</pre>{{ a.verdict }}{% if a.error %} · {{ a.error }}{% endif %}</li>
+  {% endfor %}
+</ol>
+{% endblock %}

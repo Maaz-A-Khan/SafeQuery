@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{# Owner: Fouzan. Context: core/sample_context.py schema() #}
+{% block title %}Schema · SafeQuery{% endblock %}
+{% block content %}
+<h1>Schema: {{ connection.name }}</h1>
+<p>Placeholder page (Phase 1). Captured {{ captured_at }}.</p>
+<ul>
+  {% for t in tables %}
+    <li>{{ t.name }}{% if t.restricted %} (restricted){% endif %}: {{ t.columns|length }} columns</li>
+  {% endfor %}
+</ul>
+{% endblock %}

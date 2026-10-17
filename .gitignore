@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Local databases and downloads
+*.sqlite3
+db_setup/data/
+
+# Benchmark output
+eval/results/
+
+# Editors and local Claude settings
+.vscode/
+.idea/
+.claude/settings.local.json
