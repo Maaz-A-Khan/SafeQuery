@@ -15,8 +15,13 @@ class ValidatorConfig:
     max_cost_postgres: float = 100_000          # R10
     max_rows_examined_mysql: int = 1_000_000    # R10
     row_limit: int = 1000                       # R11
-    restricted_patterns: tuple[str, ...] = (    # R6, default restricted list
+    # R6 default restricted lists, matched against whole words of a name split on
+    # "_" and case changes, singular or plural: "auth" matches auth_user, not authors.
+    restricted_table_patterns: tuple[str, ...] = (
         "user", "auth", "password", "token", "credential", "session",
+    )
+    restricted_column_patterns: tuple[str, ...] = (
+        "password", "passwd", "hash", "secret", "token", "ssn",
     )
     system_schemas: tuple[str, ...] = (         # R7
         "information_schema", "pg_catalog", "mysql", "performance_schema", "sys",

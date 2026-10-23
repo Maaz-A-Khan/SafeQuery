@@ -72,13 +72,18 @@ class KnownTables(Rule):
         raise NotImplementedError
 
 
-class RestrictedTables(Rule):
+class RestrictedData(Rule):
     id = "R6"
-    name = "Restricted tables"
+    name = "Restricted tables and columns"
     stage = Stage.TREE
 
     def check(self, tree: exp.Expression | None, ctx: ValidationContext) -> list[str]:
-        # TODO(Afraz): "Access to `x` is restricted." for every exp.Table in ctx.restricted
+        # TODO(Afraz): block
+        #   - any exp.Table in ctx.restricted_tables: "Access to `t` is restricted."
+        #   - any exp.Column that is a restricted column of a table the query reads
+        #     (ctx.schema.restricted_columns_of(table)); unqualified columns count if
+        #     any table in the query has a restricted column of that name
+        #   - SELECT * or t.* over a table with restricted columns
         raise NotImplementedError
 
 
@@ -149,7 +154,7 @@ ALL_RULES: list[Rule] = [
     ReadOnlyStatement(),
     NoWriteNodes(),
     KnownTables(),
-    RestrictedTables(),
+    RestrictedData(),
     NoSystemCatalogs(),
     AllowedFunctions(),
     JoinLimit(),

@@ -26,7 +26,8 @@ def _require(name: str) -> str:
 SECRET_KEY = _require("DJANGO_SECRET_KEY")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
-# Local only. Running on 0.0.0.0 would expose Connect and Ask to the whole network.
+# Local only (NFR-S7): Connect and Ask have no login. LocalOnlyMiddleware is the real
+# guard; ALLOWED_HOSTS checks the Host header, which a client chooses.
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 INSTALLED_APPS = [
@@ -40,6 +41,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "core.middleware.LocalOnlyMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

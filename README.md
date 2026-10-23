@@ -28,8 +28,8 @@ python manage.py runserver 127.0.0.1:8000
 
 Open http://127.0.0.1:8000/. Both setup commands print the connection string to
 paste on the Connect page. Keep `runserver` on `127.0.0.1`: Connect and Ask need
-no login, so `0.0.0.0` would open them to everyone on the network (and
-`ALLOWED_HOSTS` refuses other hosts anyway).
+no login, so the app only serves this computer. `LocalOnlyMiddleware` refuses any
+request from another address, even if the server is started on `0.0.0.0`.
 
 Note: Chinook's tables are `snake_case` in PostgreSQL (`invoice_line`) and
 `PascalCase` in SQLite (`InvoiceLine`).

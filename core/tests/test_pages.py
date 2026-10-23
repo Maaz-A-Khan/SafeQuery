@@ -42,3 +42,13 @@ def test_log_pages_refuse_staff_who_are_not_superusers(client, django_user_model
 def test_log_pages_render_for_superusers(admin_client, state):
     assert admin_client.get(reverse("log"), {"state": state}).status_code == 200
     assert admin_client.get(reverse("log_detail", args=[1])).status_code == 200
+
+
+@pytest.mark.parametrize("addr", ["192.168.1.20", "10.0.0.5"])
+def test_requests_from_other_machines_are_refused(client, addr):
+    response = client.get(reverse("connect"), REMOTE_ADDR=addr, HTTP_HOST="localhost")
+    assert response.status_code == 403
+
+
+def test_ipv6_loopback_is_allowed(client):
+    assert client.get(reverse("connect"), REMOTE_ADDR="::1").status_code == 200

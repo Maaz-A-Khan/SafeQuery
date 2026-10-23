@@ -55,14 +55,20 @@ class Schema:
 
     dialect: Dialect
     tables: dict[str, Table]
-    restricted: set[str] = field(default_factory=set)  # table names (R6)
+    restricted_tables: set[str] = field(default_factory=set)   # "auth_user" (R6)
+    restricted_columns: set[str] = field(default_factory=set)  # "customers.password_hash" (R6)
 
     def table_names(self) -> set[str]:
         return set(self.tables)
 
+    def restricted_columns_of(self, table: str) -> set[str]:
+        """Column names of `table` that are restricted."""
+        prefix = f"{table}."
+        return {c[len(prefix):] for c in self.restricted_columns if c.startswith(prefix)}
+
     def schema_hash(self) -> str:
         """Changes whenever the structure changes, so cached SQL is never reused on
-        a different schema. The restricted list is excluded: cached SQL is
+        a different schema. The restricted lists are excluded: cached SQL is
         re-validated anyway, so R6 still applies."""
         payload = json.dumps(
             [asdict(self.tables[name]) for name in sorted(self.tables)], sort_keys=True
@@ -70,7 +76,7 @@ class Schema:
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def to_json(self) -> dict:
-        """For `SchemaSnapshot.schema_json`. The restricted list is stored separately."""
+        """For `SchemaSnapshot.schema_json`. The restricted lists are stored separately."""
         data = {
             "dialect": str(self.dialect),
             "tables": [asdict(self.tables[name]) for name in sorted(self.tables)],
@@ -78,7 +84,12 @@ class Schema:
         return json.loads(json.dumps(data))  # plain lists, exactly as the JSONField returns it
 
     @classmethod
-    def from_json(cls, data: dict, restricted: list[str] | None = None) -> Schema:
+    def from_json(
+        cls,
+        data: dict,
+        restricted_tables: list[str] | None = None,
+        restricted_columns: list[str] | None = None,
+    ) -> Schema:
         tables = {}
         for t in data["tables"]:
             tables[t["name"]] = Table(
@@ -92,7 +103,7 @@ class Schema:
                     for fk in t.get("foreign_keys", ())
                 ),
             )
-        return cls(Dialect(data["dialect"]), tables, set(restricted or ()))
+        return cls(Dialect(data["dialect"]), tables, set(restricted_tables or ()), set(restricted_columns or ()))
 
 
 # --- Validator --------------------------------------------------------------

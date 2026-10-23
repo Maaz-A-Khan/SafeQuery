@@ -29,3 +29,9 @@ def generate(
 ) -> Generation:
     """Generation prompt; with `failed_sql` and `error`, the correction prompt."""
     raise NotImplementedError("Phase 6")
+
+
+def plan(question: str, table_names: list[str], dialect: Dialect, config: GeminiConfig) -> list[str]:
+    """Planner prompt (FR-Q8): 1 to `config.max_plan_steps` sub-questions; one step
+    whenever a single query can answer the question."""
+    raise NotImplementedError("Phase 6")

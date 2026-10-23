@@ -71,11 +71,12 @@ def connect(state: str = "default") -> dict:
 #   tables       list of:
 #                  name, restricted (bool), columns: list of
 #                    name, type, nullable, primary_key, foreign_key ("table.column" or ""),
-#                    sample_values (list of str; empty for most columns)
+#                    restricted (bool), sample_values (list of str; empty for most columns)
+#   Each table and each column gets a "restricted" checkbox (FR-C8, FR-U2).
 
-def _col(name, type_, pk=False, fk="", nullable=True, samples=()):
+def _col(name, type_, pk=False, fk="", nullable=True, samples=(), restricted=False):
     return {"name": name, "type": type_, "nullable": nullable, "primary_key": pk,
-            "foreign_key": fk, "sample_values": list(samples)}
+            "foreign_key": fk, "restricted": restricted, "sample_values": list(samples)}
 
 
 def schema(state: str = "default") -> dict:
@@ -100,7 +101,7 @@ def schema(state: str = "default") -> dict:
             {"name": "user_credentials", "restricted": True, "columns": [
                 _col("user_id", "INTEGER", pk=True, nullable=False),
                 _col("username", "VARCHAR(50)", nullable=False),
-                _col("password_hash", "VARCHAR(100)", nullable=False),
+                _col("password_hash", "VARCHAR(100)", nullable=False, restricted=True),
             ]},
         ],
     }

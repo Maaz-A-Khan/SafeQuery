@@ -15,18 +15,19 @@ SCHEMA = Schema(
             (ForeignKey(("artist_id",), "artist", ("artist_id",)),),
         ),
     },
-    restricted={"user_credentials"},
+    restricted_tables={"user_credentials"},
+    restricted_columns={"album.title"},
 )
 
 
 def test_schema_json_round_trip():
-    again = Schema.from_json(SCHEMA.to_json(), restricted=["user_credentials"])
+    again = Schema.from_json(SCHEMA.to_json(), ["user_credentials"], ["album.title"])
     assert again == SCHEMA
     assert again.schema_hash() == SCHEMA.schema_hash()
 
 
-def test_schema_hash_ignores_restricted_list_but_not_structure():
-    same = Schema.from_json(SCHEMA.to_json(), restricted=[])
+def test_schema_hash_ignores_restricted_lists_but_not_structure():
+    same = Schema.from_json(SCHEMA.to_json())
     assert same.schema_hash() == SCHEMA.schema_hash()
     data = SCHEMA.to_json()
     data["tables"][0]["columns"].append({"name": "extra", "type": "TEXT"})
@@ -53,3 +54,8 @@ def test_result_summaries():
 def test_target_repr_hides_url():
     target = Target(1, Dialect.POSTGRESQL, SCHEMA, url="postgresql://agent_ro:secret@localhost/chinook")
     assert "secret" not in repr(target)
+
+
+def test_restricted_columns_of():
+    assert SCHEMA.restricted_columns_of("album") == {"title"}
+    assert SCHEMA.restricted_columns_of("artist") == set()

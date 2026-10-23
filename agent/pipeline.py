@@ -18,5 +18,7 @@ def run(
 ) -> Result:
     """Answer one question. Every query, including corrections and cache hits,
     passes `agent.validator.validate` before it runs. Blocked queries are never
-    retried; database errors are corrected up to `config.gemini.max_attempts`."""
+    retried; database errors are corrected up to `config.gemini.max_attempts`.
+    Complex questions are planned into up to `config.gemini.max_plan_steps` steps.
+    Only answered questions are saved to `cache`."""
     raise NotImplementedError("Phase 6")

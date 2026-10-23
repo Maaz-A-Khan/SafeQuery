@@ -27,12 +27,16 @@ def detect_dialect(url: str) -> Dialect:
 
 
 def open_engine(url: str, config: AgentConfig) -> Engine:
-    """Engine whose every connection is read-only (FR-C5) with the statement timeout set."""
+    """Engine whose every connection is read-only (FR-C5), with the timeout enforced
+    on the database side: PostgreSQL statement_timeout, MySQL max_execution_time,
+    MariaDB max_statement_time, SQLite a progress handler. SQLite URLs are rewritten
+    to read-only file mode (mode=ro)."""
     raise NotImplementedError("Phase 5")
 
 
 def check_privileges(engine: Engine) -> PrivilegeReport:
-    """Refuse accounts that can write (FR-C4)."""
+    """Refuse accounts that can write (FR-C4). PostgreSQL: role flags, table- and
+    column-level grants, CREATE on any schema. MySQL: SHOW GRANTS, including roles."""
     raise NotImplementedError("Phase 5")
 
 

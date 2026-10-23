@@ -23,7 +23,8 @@ class DatabaseConnection(models.Model):
 class SchemaSnapshot(models.Model):
     connection = models.ForeignKey(DatabaseConnection, on_delete=models.CASCADE, related_name="snapshots")
     schema_json = models.JSONField()               # agent.types.Schema.to_json()
-    restricted_tables = models.JSONField(default=list)
+    restricted_tables = models.JSONField(default=list)       # ["auth_user"]
+    restricted_columns = models.JSONField(default=list)      # ["customers.password_hash"]
     table_count = models.IntegerField()
     captured_at = models.DateTimeField(auto_now=True)
 

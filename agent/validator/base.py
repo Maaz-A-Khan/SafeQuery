@@ -43,8 +43,13 @@ class ValidationContext:
     explain: Callable[[str], dict] | None = None
 
     @property
-    def restricted(self) -> set[str]:
-        return self.schema.restricted
+    def restricted_tables(self) -> set[str]:
+        return self.schema.restricted_tables
+
+    @property
+    def restricted_columns(self) -> set[str]:
+        """As "table.column"; see also `schema.restricted_columns_of(table)`."""
+        return self.schema.restricted_columns
 
 
 class Rule:

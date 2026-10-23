@@ -21,7 +21,8 @@ def _fk(column: str, table: str) -> ForeignKey:
 SHOP = Schema(
     dialect=Dialect.POSTGRESQL,
     tables={t.name: t for t in [
-        _table("customers", "id", "name", "email", "region_id", fks=(_fk("region_id", "regions"),)),
+        _table("customers", "id", "name", "email", "password_hash", "region_id",
+               fks=(_fk("region_id", "regions"),)),
         _table("orders", "id", "customer_id", "status", "total", "created_at",
                fks=(_fk("customer_id", "customers"),)),
         _table("order_items", "id", "order_id", "product_id", "quantity",
@@ -34,8 +35,10 @@ SHOP = Schema(
         _table("warehouses", "id", "name", "region_id"),
         _table("shipments", "id", "order_id", "warehouse_id", "drop_date"),
         _table("auth_user", "id", "email", "password_hash"),
+        _table("authors", "id", "name"),
     ]},
-    restricted={"auth_user"},
+    restricted_tables={"auth_user"},
+    restricted_columns={"customers.password_hash", "auth_user.password_hash"},
 )
 
 
