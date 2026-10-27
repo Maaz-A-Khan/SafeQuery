@@ -72,7 +72,12 @@ def connect(state: str = "default") -> dict:
 #                  name, restricted (bool), columns: list of
 #                    name, type, nullable, primary_key, foreign_key ("table.column" or ""),
 #                    restricted (bool), sample_values (list of str; empty for most columns)
+#   error        None, or why the last Refresh failed (password masked)
 #   Each table and each column gets a "restricted" checkbox (FR-C8, FR-U2).
+#   The form POSTs to the same URL:
+#     action              "save" (store the ticked boxes) or "refresh" (re-read the database)
+#     restricted_tables   one value per ticked table: the table name
+#     restricted_columns  one value per ticked column: "table.column"
 
 def _col(name, type_, pk=False, fk="", nullable=True, samples=(), restricted=False):
     return {"name": name, "type": type_, "nullable": nullable, "primary_key": pk,
@@ -83,6 +88,7 @@ def schema(state: str = "default") -> dict:
     return {
         "connection": CHINOOK,
         "captured_at": NOW - timedelta(hours=3),
+        "error": None,
         "tables": [
             {"name": "artist", "restricted": False, "columns": [
                 _col("artist_id", "INTEGER", pk=True, nullable=False),

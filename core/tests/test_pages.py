@@ -15,8 +15,8 @@ def test_connect_states(client, state):
     assert client.get(reverse("connect"), {"state": state}).status_code == 200
 
 
-def test_schema_page(client):
-    assert client.get(reverse("schema", args=[1])).status_code == 200
+def test_schema_sample_page(client):
+    assert client.get(reverse("schema", args=[1]), {"state": "default"}).status_code == 200
 
 
 @pytest.mark.parametrize("state", ["default", *sample_context.ASK_STATES])
@@ -50,5 +50,6 @@ def test_requests_from_other_machines_are_refused(client, addr):
     assert response.status_code == 403
 
 
+@pytest.mark.django_db
 def test_ipv6_loopback_is_allowed(client):
     assert client.get(reverse("connect"), REMOTE_ADDR="::1").status_code == 200
