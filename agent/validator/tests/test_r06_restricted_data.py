@@ -7,7 +7,6 @@ WHERE; SELECT * and c.* over a table with a restricted column; `authors` must be
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Phase 2: R6 not implemented yet")
 
 BLOCKED = [
     'SELECT email, password_hash FROM auth_user',
@@ -15,6 +14,10 @@ BLOCKED = [
     'SELECT name FROM customers WHERE password_hash IS NULL',
     'SELECT * FROM customers',
     'SELECT c.* FROM customers c JOIN orders o ON o.customer_id = c.id',
+    'SELECT o.id FROM orders o JOIN customers c USING (password_hash)',
+    'SELECT name FROM customers NATURAL JOIN orders',
+    'SELECT c FROM customers c',
+    'SELECT x FROM (SELECT password_hash AS x FROM customers) s',
 ]
 
 ALLOWED = [
