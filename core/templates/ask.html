@@ -1,23 +1,141 @@
 {% extends "base.html" %}
 {# Owner: Fouzan. Context: core/sample_context.py ask().
-   States: ?state=answered|corrected|blocked|failed|cannot_answer|unavailable (default: no question yet) #}
+   States: ?state=answered|corrected|blocked|failed|cannot_answer|unavailable (default: no question yet)
+   Optional: csv_url (D-026), shown as "Download CSV" when present. #}
 {% block title %}Ask · SafeQuery{% endblock %}
 {% block content %}
-<h1>Ask: {{ connection.name }}</h1>
-<p>Placeholder page (Phase 1).</p>
+<form class="ask-form" method="post">
+  {% csrf_token %}
+  <label for="{{ form.question.id_for_label }}" class="muted">Your question about {{ connection.name }}</label>
+  <div class="ask-row">
+    {{ form.question }}
+    <button class="button" type="submit">Ask</button>
+  </div>
+  {% for error in form.question.errors %}<p class="field error">{{ error }}</p>{% endfor %}
+</form>
 
-<form method="post">{% csrf_token %}{{ form.as_p }}<button>Ask</button></form>
+{% if not result %}
+  <p class="empty-hint">Ask in plain English. Gemini writes the SQL, eleven safety rules check it, and only then does it run, on an account that can only read.</p>
 
-{% if result %}
-  <p>Outcome: {{ result.outcome }} · attempts: {{ result.attempt_count }}</p>
-  {% if result.outcome == "blocked" %}
-    <ul>{% for hit in result.block_hits %}<li>{{ hit.rule_id }} {{ hit.rule_name }}: {{ hit.message }}</li>{% endfor %}</ul>
-  {% elif result.outcome == "failed" %}
-    <p>{{ result.message }}</p>
-  {% else %}
-    <p>{{ result.explanation }}</p>
-    <pre>{{ result.sql }}</pre>
-    <p>{{ result.rows|length }} rows</p>
-  {% endif %}
+{% elif result.outcome == "answered" %}
+  <div class="result">
+    <section class="slip" aria-label="SQL and verdict">
+      <div class="slip-head eyebrow">
+        <span>{% if result.from_cache %}SQL reused from the cache{% else %}SQL proposed by Gemini{% endif %}</span>
+        <span>Attempt {{ result.attempt_count }}</span>
+      </div>
+      <pre>{{ result.sql }}</pre>
+      <div class="stamp cleared" role="img" aria-label="Verdict: cleared">
+        <span class="stamp-word">CLEARED</span>
+        <span class="stamp-sub">{% if "R11" in result.rules_fired %}LIMIT ADDED · R11{% else %}ALL RULES PASSED{% endif %}</span>
+      </div>
+    </section>
+
+    <section class="result-side" aria-label="Answer">
+      {% if result.explanation %}<p class="lead">{{ result.explanation }}</p>{% endif %}
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr>{% for col in result.columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in result.rows %}{% if forloop.counter <= display_row_limit %}
+              <tr>{% for value in row %}<td>{{ value|default_if_none:"NULL" }}</td>{% endfor %}</tr>
+            {% endif %}{% empty %}
+              <tr><td colspan="{{ result.columns|length|default:1 }}" class="muted">No rows matched.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="meta-line">
+        <span>{{ result.rows_returned }} row{{ result.rows_returned|pluralize }}{% if result.truncated %} (cut at the row limit){% endif %}</span>
+        {% if result.exec_ms is not None %}<span>{{ result.exec_ms }} ms</span>{% endif %}
+        <span>ran on the read-only account</span>
+        {% if csv_url %}<a class="push" href="{{ csv_url }}">Download CSV</a>{% endif %}
+      </div>
+      {% if result.rows_returned > display_row_limit %}
+        <p class="muted">Showing the first {{ display_row_limit }} rows.</p>
+      {% endif %}
+      {% if result.attempt_count > 1 %}
+        <details>
+          <summary>Corrected after {{ result.attempt_count|add:"-1" }} database error{{ result.attempt_count|add:"-1"|pluralize }}</summary>
+          <ol class="attempt-list">
+            {% for a in result.attempts %}{% if a.error %}
+              <li><span class="eyebrow">Attempt {{ a.number }}</span><pre>{{ a.sql }}</pre><span class="error">{{ a.error }}</span></li>
+            {% endif %}{% endfor %}
+          </ol>
+        </details>
+      {% endif %}
+    </section>
+  </div>
+
+{% elif result.outcome == "blocked" %}
+  {% with last=result.attempts|last %}
+  <div class="result">
+    <section class="slip" aria-label="SQL and verdict">
+      <div class="slip-head eyebrow">
+        <span>SQL proposed by Gemini</span>
+        <span>Attempt {{ result.attempt_count }}</span>
+      </div>
+      <pre class="struck">{{ last.sql }}</pre>
+      <div class="stamp refused" role="img" aria-label="Verdict: refused">
+        <span class="stamp-word">REFUSED</span>
+        <span class="stamp-sub">RULES {% for hit in result.block_hits %}{{ hit.rule_id }}{% if not forloop.last %} · {% endif %}{% endfor %}</span>
+      </div>
+    </section>
+
+    <section class="result-side" role="alert" aria-label="Why it was refused">
+      <h2>Not run. Nothing reached {{ connection.name }}.</h2>
+      <p class="note">SafeQuery only runs SQL that passes every safety rule. The validator refused this query before it was sent.</p>
+      <dl class="rule-list">
+        {% for hit in result.block_hits %}
+          <dt>{{ hit.rule_id }}</dt>
+          <dd><strong>{{ hit.rule_name }}.</strong> <span>{{ hit.message }}</span></dd>
+        {% endfor %}
+      </dl>
+      <span class="meta-line">Recorded in the log · stopped by the validator</span>
+    </section>
+  </div>
+  {% endwith %}
+
+{% else %}
+  {% with last=result.attempts|last %}
+  <div class="result">
+    {% if last.sql %}
+      <section class="slip" aria-label="Last SQL tried">
+        <div class="slip-head eyebrow">
+          <span>Last SQL tried</span>
+          <span>Attempt {{ result.attempt_count }}</span>
+        </div>
+        <pre>{{ last.sql }}</pre>
+        <div class="stamp neutral" role="img" aria-label="Verdict: failed">
+          <span class="stamp-word">FAILED</span>
+          <span class="stamp-sub">DATABASE ERROR</span>
+        </div>
+      </section>
+    {% endif %}
+
+    <section class="result-side" role="status" aria-label="No answer">
+      {% if result.stopped_by == "model" %}
+        <span class="stamp small neutral"><span class="stamp-word">NO ANSWER</span></span>
+        <h2>This can't be answered from {{ connection.name }}.</h2>
+      {% elif result.stopped_by == "service" %}
+        <span class="stamp small neutral"><span class="stamp-word">UNAVAILABLE</span></span>
+        <h2>Gemini didn't respond, so nothing was run.</h2>
+      {% else %}
+        <h2>No answer after {{ result.attempt_count }} attempt{{ result.attempt_count|pluralize }}.</h2>
+      {% endif %}
+      <p class="note">{{ result.message }}</p>
+      {% if result.stopped_by == "database" %}
+        <details>
+          <summary>What each attempt tried</summary>
+          <ol class="attempt-list">
+            {% for a in result.attempts %}
+              <li><span class="eyebrow">Attempt {{ a.number }}</span><pre>{{ a.sql }}</pre>{% if a.error %}<span class="error">{{ a.error }}</span>{% endif %}</li>
+            {% endfor %}
+          </ol>
+        </details>
+      {% endif %}
+    </section>
+  </div>
+  {% endwith %}
 {% endif %}
 {% endblock %}

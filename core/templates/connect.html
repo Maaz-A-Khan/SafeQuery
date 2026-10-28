@@ -2,19 +2,89 @@
 {# Owner: Fouzan. Context: core/sample_context.py connect(). States: ?state=empty|success|refused|error #}
 {% block title %}Connect · SafeQuery{% endblock %}
 {% block content %}
-<h1>Connect</h1>
-<p>Placeholder page (Phase 1).</p>
+<div class="two-col">
+  <div class="main-col">
+    <div class="page-head">
+      <div>
+        <h1>Connect a database</h1>
+        <p>SafeQuery checks the account before saving it. Accounts that can change data are refused.</p>
+      </div>
+    </div>
 
-{% if check %}<p>{{ check.message }}</p>{% endif %}
+    <section class="notice warning" aria-label="What is sent to Gemini">
+      <p>The table structure and a few sample values from each connected database are sent to Google's Gemini API. Don't connect a database whose column values are confidential.</p>
+    </section>
 
-<form method="post">{% csrf_token %}{{ form.as_p }}<button>Connect</button></form>
+    <form class="connect-form" method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<span class="help">{{ field.help_text }}</span>{% endif %}
+          {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+        </div>
+      {% endfor %}
+      <button class="button" type="submit">Connect</button>
+    </form>
 
-<h2>Saved connections</h2>
-<ul>
-  {% for c in connections %}
-    <li>{{ c.name }} ({{ c.dialect }}) — <a href="{% url 'schema' c.id %}">schema</a> · <a href="{% url 'ask' c.id %}">ask</a></li>
-  {% empty %}
-    <li>No connections yet.</li>
-  {% endfor %}
-</ul>
+    {% if check %}
+      {% if check.ok %}
+        <section class="slip check-slip" role="status" aria-label="Connected">
+          <div class="stamp cleared" role="img" aria-label="Account cleared">
+            <span class="stamp-word">CLEARED</span>
+            <span class="stamp-sub">READ-ONLY</span>
+          </div>
+          <h2>{{ check.message }}</h2>
+          <p class="muted">Its tables are on the Schema page. Ask questions from the saved connection.</p>
+        </section>
+      {% elif check.writable_tables or check.grant_sql %}
+        <section class="slip check-slip" role="alert" aria-label="Connection refused">
+          <div class="stamp refused" role="img" aria-label="Account refused">
+            <span class="stamp-word">REFUSED</span>
+            <span class="stamp-sub">ACCOUNT CAN WRITE</span>
+          </div>
+          <h2>{{ check.message }}</h2>
+          {% if check.writable_tables %}
+            <div class="field">
+              <span class="eyebrow">Tables it can write to</span>
+              <span class="mono">{{ check.writable_tables|join:" · " }}</span>
+            </div>
+          {% endif %}
+          {% if check.grant_sql %}
+            <div class="field">
+              <span class="eyebrow">Create a read-only user instead</span>
+              <pre>{{ check.grant_sql }}</pre>
+            </div>
+          {% endif %}
+        </section>
+      {% else %}
+        <section class="notice" role="alert" aria-label="Could not connect">
+          <h2>{{ check.message }}</h2>
+          {% if check.error %}<p class="driver-error">{{ check.error }}</p>{% endif %}
+          <p class="muted">Check the connection string, then try again. The password is never shown back.</p>
+        </section>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <aside class="side-col" aria-labelledby="saved-heading">
+    <h2 id="saved-heading" class="eyebrow">Saved connections</h2>
+    {% for c in connections %}
+      <div class="connection-item">
+        <div class="title-row">
+          <span class="name">{{ c.name }}</span>
+          {% if c.readonly_verified %}<span class="tag cleared">READ-ONLY</span>{% endif %}
+        </div>
+        <span class="meta-line">{{ c.dialect }} · {{ c.table_count }} table{{ c.table_count|pluralize }} · added {{ c.created_at|timesince }} ago</span>
+        <div class="links">
+          <a href="{% url 'ask' c.id %}">Ask</a>
+          <a href="{% url 'schema' c.id %}">Schema</a>
+        </div>
+      </div>
+    {% empty %}
+      <p class="muted connection-item">No connections yet. Paste a connection string to add one.</p>
+    {% endfor %}
+  </aside>
+</div>
 {% endblock %}

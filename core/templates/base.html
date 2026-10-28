@@ -1,20 +1,42 @@
 {% load static %}<!doctype html>
-{# Owner: Fouzan (Phase 4). Phase 1 placeholder: replace with the Bootstrap 5 layout. #}
+{# Owner: Fouzan (Phase 4). The "Clearance" design; styles in core/static/core/style.css. #}
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}SafeQuery{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@900&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Martian+Mono:wght@400;500&amp;display=swap">
   <link rel="stylesheet" href="{% static 'core/style.css' %}">
 </head>
 <body>
-  <nav>
-    <a href="{% url 'connect' %}">Connect</a>
-    <a href="{% url 'log' %}">Log</a>
-    {% if user.is_authenticated %}
-      <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button>Log out</button></form>
-    {% endif %}
-  </nav>
-  <main>{% block content %}{% endblock %}</main>
+  {% with page=request.resolver_match.url_name %}
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="{% url 'connect' %}">SAFEQUERY</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="{% url 'connect' %}"{% if page == "connect" %} aria-current="page"{% endif %}>Connect</a>
+        {% if connection %}
+          <a href="{% url 'schema' connection.id %}"{% if page == "schema" %} aria-current="page"{% endif %}>Schema</a>
+          <a href="{% url 'ask' connection.id %}"{% if page == "ask" %} aria-current="page"{% endif %}>Ask</a>
+        {% endif %}
+        {% if user.is_superuser %}{# D-033: the Log is for the superuser only #}
+          <a href="{% url 'log' %}"{% if page == "log" or page == "log_detail" %} aria-current="page"{% endif %}>Log</a>
+        {% endif %}
+      </nav>
+      <div class="header-meta">
+        {% if connection %}
+          <span>{{ connection.name }}{% if connection.readonly_verified %} · read-only account{% endif %}</span>
+        {% endif %}
+        {% if user.is_authenticated %}
+          <span>Signed in as {{ user.get_username }}</span>
+          <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-button">Sign out</button></form>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+  {% endwith %}
+  <main class="wrap page">{% block content %}{% endblock %}</main>
 </body>
 </html>
