@@ -19,3 +19,4 @@ eval/results/
 .vscode/
 .idea/
 .claude/settings.local.json
+.claude/
