@@ -5,11 +5,13 @@ A parse failure blocks with "The generated query could not be parsed."
 
 import pytest
 
-#pytestmark = pytest.mark.skip(reason="Phase 2: R1 not implemented yet")
 
 BLOCKED = [
     'SELEC * FORM orders',
     'SELECT * FROM (orders',
+    '',
+    ';',
+    '   -- only a comment',
 ]
 
 ALLOWED = [

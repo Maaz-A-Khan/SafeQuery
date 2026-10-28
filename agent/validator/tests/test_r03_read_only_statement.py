@@ -2,7 +2,6 @@
 
 import pytest
 
-#pytestmark = pytest.mark.skip(reason="Phase 2: R3 not implemented yet")
 
 BLOCKED = [
     "DELETE FROM orders WHERE status = 'cancelled'",

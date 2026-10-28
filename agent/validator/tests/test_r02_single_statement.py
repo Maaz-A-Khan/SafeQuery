@@ -5,7 +5,6 @@ Tricky: a second statement after a comment is blocked; a trailing semicolon is a
 
 import pytest
 
-#pytestmark = pytest.mark.skip(reason="Phase 2: R2 not implemented yet")
 
 BLOCKED = [
     'SELECT * FROM orders; DROP TABLE orders',
@@ -15,6 +14,8 @@ BLOCKED = [
 ALLOWED = [
     'SELECT * FROM orders',
     'SELECT * FROM orders;',
+    'SELECT * FROM orders; -- done',
+    'SELECT * FROM orders;;',
 ]
 
 

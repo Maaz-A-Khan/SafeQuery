@@ -6,8 +6,6 @@ after R11 has added its LIMIT.
 
 import pytest
 
-#pytestmark = pytest.mark.skip(reason="Phase 2: R10 not implemented yet")
-
 
 def fake_explain(total_cost):
     seen = []
@@ -22,7 +20,7 @@ def fake_explain(total_cost):
 
 @pytest.mark.parametrize("cost", [100_001, 5_000_000])
 def test_blocks_expensive(check, cost):
-    verdict = check("SELECT * FROM orders CROSS JOIN customers", explain=fake_explain(cost))
+    verdict = check("SELECT o.id FROM orders o CROSS JOIN products p", explain=fake_explain(cost))
     assert not verdict.allowed
     assert "R10" in verdict.rule_ids
 
@@ -33,7 +31,7 @@ def test_allows_cheap(check, cost):
 
 
 def test_skipped_without_explain(check):
-    assert "R10" not in check("SELECT * FROM orders CROSS JOIN customers").rule_ids
+    assert "R10" not in check("SELECT o.id FROM orders o CROSS JOIN products p").rule_ids
 
 
 def test_explains_the_rewritten_sql(check):

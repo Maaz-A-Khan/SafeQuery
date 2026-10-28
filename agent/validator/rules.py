@@ -59,58 +59,22 @@ def _camel_to_snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
-# --- Whole-word name matching (R6) ------------------------------------------
+# --- Restricted names (R6) --------------------------------------------------
 
-
-def _words(name: str) -> list[str]:
-    """Split a name on "_" and on case changes: "InvoiceLine" -> ["invoice", "line"]."""
-    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
-    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", spaced)
-    return [w for w in re.split(r"[^a-z0-9]+", spaced.lower()) if w]
-
-
-def matches_patterns(name: str, patterns: tuple[str, ...] | frozenset[str]) -> bool:
-    """True when a whole word of `name` equals a pattern, singular or plural.
-
-    "auth" matches auth_user and AuthToken, but not "authors" (that is one word
-    that merely starts with "auth"). "user" matches "users".
-    """
-    wanted = {p.lower() for p in patterns}
-    for word in _words(name):
-        if word in wanted:
-            return True
-        if any(word in (p + "s", p + "es") for p in wanted):
-            return True
-    return False
-
-
-def default_restricted_tables(schema, config) -> set[str]:
-    """Tables whose names match `config.restricted_table_patterns`.
-
-    Public so the Schema page can pre-tick the same defaults R6 enforces.
-    """
-    return {n for n in schema.tables if matches_patterns(n, config.restricted_table_patterns)}
-
-
-def default_restricted_columns(schema, config) -> set[str]:
-    """"table.column" entries whose column matches `config.restricted_column_patterns`."""
-    return {
-        f"{table.name}.{col.name}"
-        for table in schema.tables.values()
-        for col in table.columns
-        if matches_patterns(col.name, config.restricted_column_patterns)
-    }
+# The restricted lists on the schema are the source of truth: `agent.schema`
+# pre-ticks the pattern defaults when it reads the database, and the user may
+# untick or add names on the Schema page (FR-C8). R6 must not re-add defaults
+# the user removed.
 
 
 def _restricted_tables(ctx: ValidationContext) -> set[str]:
-    """Explicit restricted tables plus the pattern defaults, lower-cased."""
-    names = set(ctx.restricted_tables) | default_restricted_tables(ctx.schema, ctx.config)
-    return {n.lower() for n in names}
+    """Restricted tables, lower-cased."""
+    return {n.lower() for n in ctx.restricted_tables}
 
 
 def _restricted_columns(ctx: ValidationContext) -> dict[str, set[str]]:
-    """Lower-cased table -> restricted column names (explicit plus pattern defaults)."""
-    pairs = set(ctx.restricted_columns) | default_restricted_columns(ctx.schema, ctx.config)
+    """Lower-cased table -> restricted column names."""
+    pairs = set(ctx.restricted_columns)
     by_table: dict[str, set[str]] = {}
     for pair in pairs:
         table, _, column = pair.partition(".")
@@ -133,6 +97,8 @@ class Parseable(Rule):
     ) -> list[str]:
         if ctx.parse_error:
             return ["The generated query could not be parsed."]
+        if not ctx.statements:
+            return ["The generated query is empty."]
 
         # sqlglot can sometimes recover malformed SQL such as
         # "SELEC * FORM orders" as an ALIAS expression.
@@ -150,7 +116,7 @@ class SingleStatement(Rule):
     stage = Stage.PARSE
 
     def check(self, tree: exp.Expression | None, ctx: ValidationContext) -> list[str]:
-        if ctx.parse_error:
+        if ctx.parse_error or not ctx.statements:
             return []  # R1 already explains this
         if len(ctx.statements) != 1:
             return ["Only one query can run at a time."]
@@ -182,6 +148,8 @@ _WRITE_NODES = _node_classes(
     "LoadData", "Attach", "Detach", "Analyze", "Comment", "Kill",
 )
 _INTO = _node_classes("Into")
+# SELECT ... FOR UPDATE / FOR SHARE / LOCK IN SHARE MODE: reads that lock rows.
+_LOCK = _node_classes("Lock")
 
 
 class NoWriteNodes(Rule):
@@ -202,7 +170,7 @@ class NoWriteNodes(Rule):
             return []
         messages: list[str] = []
         seen: set[str] = set()
-        for node in tree.find_all(*_WRITE_NODES, *_INTO):
+        for node in tree.find_all(*_WRITE_NODES, *_INTO, *_LOCK):
             kind = type(node).__name__
             if kind in seen:
                 continue
@@ -210,6 +178,10 @@ class NoWriteNodes(Rule):
             if _INTO and isinstance(node, _INTO):
                 messages.append(
                     "`SELECT ... INTO` creates a new table, so it is not allowed."
+                )
+            elif _LOCK and isinstance(node, _LOCK):
+                messages.append(
+                    "`FOR UPDATE` and `FOR SHARE` lock rows, so they are not allowed."
                 )
             else:
                 messages.append(
@@ -292,6 +264,17 @@ class RestrictedData(Rule):
             if table.name.lower() in restricted_tables:
                 add(f"Access to `{real_names.get(table.name.lower(), table.name)}` is restricted.")
 
+        # 1b. `FROM customers AS c(a, b, c, w)` renames columns by position, so
+        # `w` would read password_hash without ever naming it.
+        for table in tables:
+            real = table.name.lower()
+            alias = table.args.get("alias")
+            if real in real_names and restricted_cols.get(real) and alias is not None and alias.args.get("columns"):
+                add(
+                    f"Renaming the columns of `{real_names[real]}` is not allowed because it has "
+                    "restricted columns."
+                )
+
         # 2. restricted columns, named explicitly
         for col in tree.find_all(exp.Column):
             if isinstance(col.this, exp.Star):
@@ -314,6 +297,23 @@ class RestrictedData(Rule):
                         add(
                             f"Selecting `{col.name}` as a whole row would expose "
                             f"restricted columns of `{real_names[real]}`."
+                        )
+
+        # 2b. JOIN ... USING (col) and NATURAL JOIN compare columns without naming
+        # them as Column nodes, so a restricted column could be probed through
+        # the join condition.
+        for join in tree.find_all(exp.Join):
+            for ident in join.args.get("using") or []:
+                cname = ident.name.lower()
+                for real in sorted(in_query):
+                    if cname in restricted_cols.get(real, ()):
+                        add(f"Access to `{real_names[real]}.{ident.name}` is restricted.")
+            if str(join.args.get("method") or "").upper() == "NATURAL":
+                for real in sorted(in_query):
+                    if restricted_cols.get(real):
+                        add(
+                            f"`NATURAL JOIN` compares every same-named column, including "
+                            f"restricted columns of `{real_names[real]}`. Join with `ON` instead."
                         )
 
         # 3. SELECT * and t.* over tables that have restricted columns
@@ -345,6 +345,13 @@ class RestrictedData(Rule):
         return messages
 
 
+_SESSION_PARAMETERS = _node_classes("SessionParameter")
+_SESSION_KEYWORDS = {
+    "user", "current_user", "session_user", "current_role", "system_user",
+    "current_catalog", "current_schema",
+}
+
+
 class NoSystemCatalogs(Rule):
     id = "R7"
     name = "No system catalogs"
@@ -369,6 +376,34 @@ class NoSystemCatalogs(Rule):
             message = f"System catalog `{label}` cannot be queried."
             if message not in messages:
                 messages.append(message)
+
+        # Server variables (MySQL `@@version`, `@@datadir`) describe the server, not the data.
+        for param in tree.find_all(*_SESSION_PARAMETERS):
+            message = f"Server variable `@@{param.name}` cannot be read."
+            if message not in messages:
+                messages.append(message)
+
+        # A bare `user` / `session_user` in PostgreSQL is the login name, not a
+        # column, unless a table in the query really has a column of that name.
+        in_query = {t.name.lower() for t in tree.find_all(exp.Table) if t.name}
+        real_columns = {
+            c.name.lower()
+            for name, table in ctx.schema.tables.items()
+            if name.lower() in in_query
+            for c in table.columns
+        }
+        for col in tree.find_all(exp.Column):
+            ident = col.this
+            if (
+                isinstance(ident, exp.Identifier)
+                and not ident.quoted
+                and not col.table
+                and ident.name.lower() in _SESSION_KEYWORDS
+                and ident.name.lower() not in real_columns
+            ):
+                message = f"`{ident.name}` reveals the database login and cannot be queried."
+                if message not in messages:
+                    messages.append(message)
         return messages
 
 
@@ -379,7 +414,10 @@ class NoSystemCatalogs(Rule):
 # TimeToStr). This maps an allowed SQL name to the node names it may appear as.
 _ALIASES: dict[str, frozenset[str]] = {
     "date_trunc": frozenset({"timestamp_trunc", "datetime_trunc"}),
-    "strftime": frozenset({"time_to_str"}),
+    "strftime": frozenset({"time_to_str", "ts_or_ds_to_timestamp"}),
+    "year": frozenset({"ts_or_ds_to_date"}),
+    "month": frozenset({"ts_or_ds_to_date"}),
+    "day": frozenset({"ts_or_ds_to_date"}),
     "to_char": frozenset({"time_to_str"}),
     "position": frozenset({"str_position", "strpos"}),
     "substr": frozenset({"substring"}),
@@ -445,9 +483,18 @@ class AllowedFunctions(Rule):
             if _STRUCTURAL and isinstance(node, _STRUCTURAL):
                 continue
             shown, names = _function_names(node)
-            if names & allowed:
+            # `evil.upper(x)` parses as the built-in UPPER under a Dot, but the
+            # database would call whatever `upper` lives in schema `evil`.
+            parent = node.parent
+            if isinstance(parent, exp.Dot) and parent.expression is node:
+                message = (
+                    f"The schema-qualified function `{parent.this.sql()}.{shown}` is not allowed; "
+                    "only built-in functions may be called."
+                )
+            elif names & allowed:
                 continue
-            message = f"The function `{shown}` is not on the allowed list."
+            else:
+                message = f"The function `{shown}` is not on the allowed list."
             if message not in messages:
                 messages.append(message)
         # SELECT ... INTO OUTFILE / DUMPFILE writes a file on the database server.
@@ -527,9 +574,11 @@ class RowLimit(Rule):
         return []
 
     def apply(self, tree: exp.Expression, ctx: ValidationContext) -> tuple[exp.Expression, list[str]]:
+        notes = self.check(tree, ctx)
+        if not notes:
+            return tree, []  # a LIMIT of `row_limit` or less is the user's answer: keep it
         n = ctx.config.row_limit
         new_root = _outermost(tree.copy())
-        notes = self.check(tree, ctx)
         limit = new_root.args.get("limit")
         if isinstance(limit, exp.Limit):
             limit.set("expression", exp.Literal.number(n))  # keeps any OFFSET

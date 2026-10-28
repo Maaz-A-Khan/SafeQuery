@@ -30,20 +30,27 @@ class ValidatorConfig:
     # R8 is an ALLOW list: any function not listed is blocked (fails closed, NFR-S3).
     # A deny list misses functions such as query_to_xml() and set_config(), which
     # run SQL or change settings from inside a SELECT. Lower-case SQL names.
-    # TODO(Afraz): finalise; sqlglot types common functions (exp.Count, exp.Upper, ...)
-    # and puts unknown ones in exp.Anonymous.
+    # Every name here is a pure, read-only built-in; schema-qualified calls are
+    # always blocked. sqlglot types common functions (exp.Count, exp.Upper, ...) and
+    # puts unknown ones in exp.Anonymous; see rules._ALIASES for spelling differences.
     allowed_functions: frozenset[str] = frozenset({
         # aggregates
-        "count", "sum", "avg", "min", "max",
+        "count", "sum", "avg", "min", "max", "string_agg", "group_concat",
+        "stddev", "variance", "percentile_cont", "percentile_disc",
+        # window functions
+        "row_number", "rank", "dense_rank", "ntile", "percent_rank", "cume_dist",
+        "lag", "lead", "first_value", "last_value",
         # null handling and comparison
         "coalesce", "nullif", "ifnull", "greatest", "least",
         # text
         "upper", "lower", "trim", "ltrim", "rtrim", "length", "char_length",
-        "substring", "substr", "concat", "replace", "left", "right", "position",
+        "substring", "substr", "concat", "concat_ws", "replace", "left", "right",
+        "position", "initcap",
         # numbers
-        "round", "abs", "floor", "ceil", "ceiling",
+        "round", "abs", "floor", "ceil", "ceiling", "power", "sqrt", "sign",
         # dates
-        "date_trunc", "extract", "date_part", "strftime", "date", "year", "month",
+        "date_trunc", "extract", "date_part", "strftime", "date", "year", "month", "day",
+        "to_char", "age", "julianday", "datediff",
         "now", "current_date", "current_timestamp",
         # types and conditionals
         "cast", "case", "if",

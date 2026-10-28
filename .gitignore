@@ -18,4 +18,4 @@ eval/results/
 # Editors and local Claude settings
 .vscode/
 .idea/
-.claude/settings.local.json
+.claude/
