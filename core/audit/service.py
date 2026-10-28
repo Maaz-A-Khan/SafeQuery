@@ -100,8 +100,9 @@ def _final_sql(result: Result) -> str:
     return generated[-1] if generated else ""
 
 
-def log_request(connection_id: int, result: Result) -> None:
-    """Write one `QueryLog` row per question (FR-L1).
+def log_request(connection_id: int, result: Result) -> int | None:
+    """Write one `QueryLog` row per question (FR-L1) and return its id, or None if
+    the write failed (the CSV link needs the id).
 
     Never stores `result.rows` or a connection string (FR-L2). A failed write is
     logged and swallowed so it never stops the answer (NFR-R3).
@@ -110,7 +111,7 @@ def log_request(connection_id: int, result: Result) -> None:
         dialect = (
             DatabaseConnection.objects.filter(pk=connection_id).values_list("dialect", flat=True).first()
         )
-        QueryLog.objects.create(
+        entry = QueryLog.objects.create(
             connection_id=connection_id,
             question=result.question,
             plan_json=result.plan or None,
@@ -126,8 +127,10 @@ def log_request(connection_id: int, result: Result) -> None:
             exec_ms=result.exec_ms,
             anomaly_flags=anomaly_flags(connection_id, dialect, result),
         )
+        return entry.id
     except Exception:
         logger.exception("Could not write audit log row")
+        return None
 
 
 # --- Cache (FR-L4) -----------------------------------------------------------------

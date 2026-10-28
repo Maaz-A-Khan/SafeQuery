@@ -17,9 +17,12 @@ from agent import pipeline
 from agent.connection import (
     UnsupportedDatabase, check_privileges, decrypt_url, encrypt_url, open_engine, safe_error,
 )
+from agent.executor import ExecutionError, execute, explainer
 from agent.schema import introspect
-from agent.types import Column, Dialect, Result, Schema, Table, Target
+from agent.types import Column, Dialect, Outcome, Result, Schema, StoppedBy, Table, Target
+from agent.validator import validate
 from core.audit import service as audit
+from core.audit.models import QueryLog
 from core.models import DatabaseConnection, SchemaSnapshot
 
 logger = logging.getLogger(__name__)
@@ -176,12 +179,46 @@ def load_target(connection_id: int) -> Target:
     return Target(connection.id, Dialect(connection.dialect), schema, url)
 
 
-def answer_question(connection_id: int, question: str) -> Result:
+def answer_question(connection_id: int, question: str) -> tuple[Result, int | None]:
+    """Answer a question and log it. Returns the result and its QueryLog id (None if
+    the log write failed), which the Ask page needs for the CSV link."""
     config = settings.SAFEQUERY
     cache = ConnectionCache(connection_id) if config.switches.cache else None
-    result = pipeline.run(load_target(connection_id), question, config, cache)
     try:
-        audit.log_request(connection_id, result)
+        result = pipeline.run(load_target(connection_id), question, config, cache)
+    except Exception:   # a bug must not show a traceback page to the user
+        logger.exception("Pipeline failed")
+        result = Result(question, Outcome.FAILED, StoppedBy.SERVICE,
+                        message="Something went wrong inside SafeQuery, so the question was not answered.")
+    try:
+        log_id = audit.log_request(connection_id, result)
     except Exception:
         logger.exception("Audit log write failed")  # never blocks the answer (NFR-R3)
-    return result
+        log_id = None
+    return result, log_id
+
+
+def csv_rows(connection_id: int, log_id: int) -> tuple[list[str], list[tuple]] | str:
+    """Rerun an answered question's final SQL for its CSV download (FR-U5): validated
+    again, run on the read-only connection, nothing stored. Returns (columns, rows),
+    or a message saying why it cannot be downloaded."""
+    entry = QueryLog.objects.filter(
+        pk=log_id, connection_id=connection_id, verdict=Outcome.ANSWERED.value
+    ).exclude(final_sql="").first()
+    if entry is None:
+        raise QueryLog.DoesNotExist
+    target = load_target(connection_id)
+    config = settings.SAFEQUERY
+    engine = open_engine(target.url, config)
+    try:
+        verdict = validate(entry.final_sql, target.schema, target.dialect, config=config.validator,
+                           explain=explainer(engine, target.dialect, config.executor))
+        if not verdict.allowed:
+            return "This query is now blocked: " + " ".join(h.message for h in verdict.blocks)
+        try:
+            ex = execute(engine, verdict.sql, config.executor)
+        except ExecutionError as exc:
+            return f"The query could not be run again: {exc}"
+        return ex.columns, ex.rows
+    finally:
+        engine.dispose()

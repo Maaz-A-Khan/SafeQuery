@@ -5,12 +5,20 @@ Each page's context has the shape documented in `core/sample_context.py`.
 and checked against every state without a database.
 """
 
+import csv
+
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.views.decorators.http import require_GET
 
 from agent.connection import mask_url
 from core import sample_context, services
+from core.audit.models import QueryLog
 from core.forms import AskForm, ConnectForm
 from core.models import DatabaseConnection
+
+DISPLAY_ROW_LIMIT = 100   # rows shown on the Ask page; the CSV has all of them (FR-U5)
 
 
 def _state(request) -> str | None:
@@ -85,7 +93,56 @@ def schema(request, connection_id: int):
 
 
 def ask(request, connection_id: int):
-    # TODO(Maaz, Phase 6): on POST call core.services.answer_question.
-    ctx = sample_context.ask(_state(request) or "default")
-    ctx["form"] = AskForm(initial={"question": ctx["question"]})
-    return render(request, "ask.html", ctx)
+    """POST field: `question`. The answer is rendered straight away; rows are never stored."""
+    if _state(request):
+        ctx = sample_context.ask(_state(request))
+        ctx["form"] = AskForm(initial={"question": ctx["question"]})
+        return render(request, "ask.html", ctx)
+    connection = get_object_or_404(DatabaseConnection, pk=connection_id)
+    form, result, csv_url = AskForm(), None, None
+    if request.method == "POST":
+        form = AskForm(request.POST)
+        if form.is_valid():
+            result, log_id = services.answer_question(connection.id, form.cleaned_data["question"])
+            if result.outcome == "answered" and log_id is not None:
+                csv_url = reverse("ask_csv", args=[connection.id, log_id])
+    return render(request, "ask.html", {
+        "connection": connection_dict(connection),
+        "question": result.question if result else "",
+        "result": result,
+        "form": form,
+        "display_row_limit": DISPLAY_ROW_LIMIT,
+        "csv_url": csv_url,
+    })
+
+
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_cell(value) -> str:
+    """A cell as text, defused against spreadsheet formula injection."""
+    if value is None:
+        return ""
+    text_value = str(value)
+    return "'" + text_value if text_value.startswith(_FORMULA_START) else text_value
+
+
+@require_GET
+def ask_csv(request, connection_id: int, log_id: int):
+    """Download an answered question's rows as CSV (FR-U5): the logged final SQL is
+    validated and run again on the read-only connection; nothing is stored."""
+    get_object_or_404(DatabaseConnection, pk=connection_id)
+    try:
+        outcome = services.csv_rows(connection_id, log_id)
+    except QueryLog.DoesNotExist:
+        raise Http404("No answered question with that id.")
+    if isinstance(outcome, str):
+        return HttpResponse(outcome, status=409, content_type="text/plain; charset=utf-8")
+    columns, rows = outcome
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="safequery-{log_id}.csv"'
+    response.write("\ufeff")   # BOM so Excel reads UTF-8
+    writer = csv.writer(response)
+    writer.writerow(columns)
+    writer.writerows([_csv_cell(v) for v in row] for row in rows)
+    return response

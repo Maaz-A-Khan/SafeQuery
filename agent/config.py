@@ -65,10 +65,13 @@ class ExecutorConfig:
 
 @dataclass(frozen=True)
 class GeminiConfig:
-    model: str = "gemini-2.5-flash"    # confirm the current free-tier model (open decision)
+    model: str = "gemini-3.6-flash"    # D-027
     temperature: float = 0.0
-    max_attempts: int = 3              # FR-Q5, NFR-R2
-    max_plan_steps: int = 4            # FR-Q8 (stretch)
+    max_attempts: int = 3              # FR-Q5, NFR-R2: per step
+    max_plan_steps: int = 4            # FR-Q8
+    max_step_values: int = 500         # values carried from one step to the next (D-028)
+    request_timeout_s: float = 60.0    # a Gemini call that takes longer counts as unavailable
+    api_key: str = field(default="", repr=False)   # GEMINI_API_KEY; repr=False keeps it out of logs
 
 
 @dataclass(frozen=True)

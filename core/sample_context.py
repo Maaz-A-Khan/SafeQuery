@@ -120,7 +120,8 @@ def schema(state: str = "default") -> dict:
 #                 outcome ("answered" | "blocked" | "failed"), stopped_by, message,
 #                 columns, rows, truncated, sql, explanation, attempt_count,
 #                 block_hits (list of RuleHit: rule_id, rule_name, message), from_cache
-#   display_row_limit  rows shown on screen (the rest only in the CSV, stretch)
+#   display_row_limit  rows shown on screen (the rest only in the CSV)
+#   csv_url     link for Download CSV, or None (only answered questions; FR-U5)
 
 TOP_ARTISTS_SQL = (
     "SELECT ar.name, COUNT(*) AS tracks\nFROM track t\nJOIN album al ON al.album_id = t.album_id\n"
@@ -206,6 +207,7 @@ def ask(state: str = "default") -> dict:
         "question": result.question if result else "",
         "result": result,
         "display_row_limit": 100,
+        "csv_url": "/ask/1/csv/2/" if result and result.outcome == Outcome.ANSWERED else None,
     }
 
 
