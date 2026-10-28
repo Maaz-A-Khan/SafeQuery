@@ -7,7 +7,7 @@ WHERE; SELECT * and c.* over a table with a restricted column; `authors` must be
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Phase 2: R6 not implemented yet")
+#pytestmark = pytest.mark.skip(reason="Phase 2: R6 not implemented yet")
 
 BLOCKED = [
     'SELECT email, password_hash FROM auth_user',

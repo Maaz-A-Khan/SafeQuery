@@ -2,7 +2,7 @@
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Phase 2: R7 not implemented yet")
+#pytestmark = pytest.mark.skip(reason="Phase 2: R7 not implemented yet")
 
 BLOCKED = [
     'SELECT usename, passwd FROM pg_catalog.pg_shadow',

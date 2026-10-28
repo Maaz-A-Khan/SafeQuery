@@ -5,7 +5,7 @@ Tricky: an existing LIMIT 5000 must be lowered to 1000. R11 never blocks.
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Phase 2: R11 not implemented yet")
+#pytestmark = pytest.mark.skip(reason="Phase 2: R11 not implemented yet")
 
 REWRITTEN = [
     ("SELECT * FROM orders", 1000),

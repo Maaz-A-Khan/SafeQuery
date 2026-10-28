@@ -6,7 +6,7 @@ turns read-only mode off from inside a SELECT.
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Phase 2: R8 not implemented yet")
+#pytestmark = pytest.mark.skip(reason="Phase 2: R8 not implemented yet")
 
 BLOCKED = [
     'SELECT *, pg_sleep(60) FROM customers',

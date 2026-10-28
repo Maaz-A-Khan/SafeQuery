@@ -5,7 +5,7 @@ Tricky: a DELETE inside a CTE, and SELECT ... INTO (parses as a Select, creates 
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Phase 2: R4 not implemented yet")
+#pytestmark = pytest.mark.skip(reason="Phase 2: R4 not implemented yet")
 
 BLOCKED = [
     'WITH gone AS (DELETE FROM orders RETURNING *) SELECT * FROM gone',

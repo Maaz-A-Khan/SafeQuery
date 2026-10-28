@@ -5,7 +5,7 @@ Tricky: a CTE named like a missing table must be ALLOWED.
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Phase 2: R5 not implemented yet")
+#pytestmark = pytest.mark.skip(reason="Phase 2: R5 not implemented yet")
 
 BLOCKED = [
     'SELECT * FROM order_history',

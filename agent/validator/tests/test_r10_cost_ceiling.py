@@ -6,7 +6,7 @@ after R11 has added its LIMIT.
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Phase 2: R10 not implemented yet")
+#pytestmark = pytest.mark.skip(reason="Phase 2: R10 not implemented yet")
 
 
 def fake_explain(total_cost):
