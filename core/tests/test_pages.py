@@ -41,7 +41,7 @@ def test_log_pages_refuse_staff_who_are_not_superusers(client, django_user_model
 @pytest.mark.parametrize("state", ["default", "empty"])
 def test_log_pages_render_for_superusers(admin_client, state):
     assert admin_client.get(reverse("log"), {"state": state}).status_code == 200
-    assert admin_client.get(reverse("log_detail", args=[1])).status_code == 200
+    assert admin_client.get(reverse("log_detail", args=[1]), {"state": state}).status_code == 200
 
 
 @pytest.mark.parametrize("addr", ["192.168.1.20", "10.0.0.5"])
