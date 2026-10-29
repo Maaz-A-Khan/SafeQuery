@@ -172,3 +172,22 @@ def test_prompt_forbids_substituting_withheld_columns(replies):
     queue.append('{"sql": "SELECT 1", "explanation": "x"}')
     generator.generate("q", DDL, Dialect.SQLITE, CONFIG)
     assert "Never substitute a different column" in sent[0]
+
+
+@pytest.mark.parametrize("error, sent", [
+    ('invalid input syntax for type integer: "Rock"', "invalid input syntax for type integer: <value>"),
+    ('value "99999999999" is out of range for type integer', "value <value> is out of range for type integer"),
+    ("Truncated incorrect DOUBLE value: 'abc'", "Truncated incorrect DOUBLE value: <value>"),
+    ('column "nme" does not exist', 'column "nme" does not exist'),
+    ("Unknown column 'x' in 'field list'", "Unknown column 'x' in 'field list'"),
+    ("no such column: nme", "no such column: nme"),
+    ("syntax error\nDETAIL: Key (email)=(a@b.c)", "syntax error"),
+])
+def test_correction_prompt_never_carries_values_from_errors(error, sent):
+    """A cast on a stored value quotes the row's value in the error (D-046)."""
+    prompt = generator.generation_prompt("q", DDL, Dialect.POSTGRESQL, failed_sql="SELECT 1", error=error)
+    assert f"Database error: {sent}\n" in prompt
+
+
+def test_prompt_asks_for_no_sample_values():
+    assert "sample" not in generator.generation_prompt("q", DDL, Dialect.POSTGRESQL)

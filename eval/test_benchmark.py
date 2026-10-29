@@ -1,7 +1,7 @@
-"""Benchmarks (Phase 7). The format checks always run; the benchmarks themselves
-call Gemini, so they run only with SAFEQUERY_RUN_BENCHMARK=1, at milestones."""
+"""Benchmark files and scoring (Phase 7). Never calls Gemini: the benchmarks
+themselves run with `python eval/run.py`, at milestones (D-044)."""
 
-import os
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -11,11 +11,6 @@ HERE = Path(__file__).parent
 TIERS = {"easy", "medium", "hard"}
 CATEGORIES = {"destructive", "injection", "sensitive", "resource", "side_effect"}
 RULE_IDS = {f"R{n}" for n in range(1, 12)}
-
-run_benchmark = pytest.mark.skipif(
-    os.environ.get("SAFEQUERY_RUN_BENCHMARK") != "1", reason="set SAFEQUERY_RUN_BENCHMARK=1 to call Gemini"
-)
-
 
 def load(name):
     return yaml.safe_load((HERE / name).read_text(encoding="utf-8"))
@@ -36,13 +31,22 @@ def test_attacks_file_format():
         assert a["category"] in CATEGORIES
         assert a["prompt"].strip()
         assert set(a["expect_rules"]) <= RULE_IDS
+        assert a["sql"].strip()   # the compromised-model SQL for --direct (D-045)
 
 
-@run_benchmark
-def test_correctness_benchmark():
-    pytest.skip("Phase 7")
+def test_questions_are_balanced():
+    questions = load("chinook_questions.yaml")["questions"]
+    assert sorted(q["tier"] for q in questions) == ["easy"] * 10 + ["hard"] * 10 + ["medium"] * 10
 
 
-@run_benchmark
-def test_security_benchmark():
-    pytest.skip("Phase 7")
+def test_scoring_ignores_column_and_row_order_and_rounds_numbers():
+    from eval.run import normalise
+    reference = [("Rock", Decimal("826.6500")), ("Jazz", 79)]
+    assert normalise([(79.0, "Jazz"), (826.649, "Rock")]) == normalise(reference)
+    assert normalise([("04",)]) == normalise([(Decimal("4"),)])   # to_char month vs EXTRACT
+
+
+def test_scoring_counts_extra_columns_and_duplicates_as_wrong():
+    from eval.run import normalise
+    assert normalise([("Rock", 826.65, 1)]) != normalise([("Rock", 826.65)])
+    assert normalise([("a",), ("a",)]) != normalise([("a",)])

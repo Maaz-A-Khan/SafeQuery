@@ -70,8 +70,8 @@ def test_connection_failure_never_echoes_the_password(client):
     url = app.set(drivername="postgresql+psycopg", username="nobody", password="hunter2")
     response = post_connect(client, "Bad", url.render_as_string(hide_password=False))
     check = response.context["check"]
-    assert "nobody" in check["error"]
-    assert not check["ok"] and check["message"] == "Could not connect to the database."
+    assert not check["ok"] and check["message"] == services.CONNECT_FAILED
+    assert check["error"] == ""   # no driver text: it would say whether a server is there (F-01)
     assert "hunter2" not in response.content.decode()
     assert "hunter2" not in response.context["form"].data["url"]
     assert not DatabaseConnection.objects.exists()

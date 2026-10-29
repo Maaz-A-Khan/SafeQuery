@@ -59,8 +59,9 @@ def connect(state: str = "default") -> dict:
                         "grant_sql": READONLY_HELP}
     elif state == "error":
         ctx["form"] = ConnectForm(data={"name": "Shop", "url": "postgresql+psycopg://agent_ro:***@localhost:5433/shop"})
-        ctx["check"] = {"ok": False, "message": "Could not connect to the database.",
-                        "error": 'connection to server at "localhost" (::1), port 5433 failed: Connection refused',
+        ctx["check"] = {"ok": False, "message": "Could not connect to the database. Check the host, port, "
+                                                "database name, user and password.",
+                        "error": "",   # never the driver's text on this page (F-01, D-047)
                         "writable_tables": [], "grant_sql": ""}
     return ctx
 

@@ -44,7 +44,14 @@ least one; tests never call Gemini.
 ```powershell
 pytest                                   # everything; never calls Gemini
 pytest agent/validator                   # one area
-$env:SAFEQUERY_RUN_BENCHMARK="1"; pytest eval   # benchmarks, calls Gemini: milestones only
+```
+
+Benchmarks call Gemini, so they are a separate command, run at milestones only
+(paced to 14 calls a minute; a run cut short by the quota resumes where it stopped):
+
+```powershell
+python eval/run.py correctness           # 30 Chinook questions -> eval/results/correctness.csv
+python eval/run.py security --run 1      # 15 attacks, everything on (run 2: validator off)
 ```
 
 pytest creates its own test database, so the `safequery` role has `CREATEDB`.
@@ -56,12 +63,12 @@ through a pull request that Maaz reviews. A branch is done when its tests pass.
 
 | Member | Folders | What is there |
 | :--- | :--- | :--- |
-| Afraz | `agent/validator/`, `eval/attacks.yaml` | Rules R1 to R11 in `rules.py`, the staged engine in `engine.py`, a test file per rule plus `test_engine.py` and the attack corpus (`attack_corpus.py`, 1,883 cases) |
+| Afraz | `agent/validator/`, `eval/attacks.yaml` | Rules R1 to R11 in `rules.py`, the staged engine in `engine.py`, a test file per rule plus `test_engine.py` and the attack corpus (`attack_corpus.py`, 1,883 attacks, 87 benign queries) |
 | Sunil | `core/audit/` | `QueryLog` and `QueryCache`, `log_request`, the cache, anomaly flags, the superuser-only Log pages |
 | Fouzan | `core/templates/`, `core/static/` | Every page in the Clearance design; each page's context is documented in `core/sample_context.py` |
 | Maaz | `agent/` (except `validator/`), `core/` (rest), `eval/` questions, `db_setup/` | Connection and schema (`connection.py`, `schema.py`), the Gemini client, executor and pipeline (`generator.py`, `executor.py`, `pipeline.py`), the Ask page and CSV download |
 
-Phases 1 to 6 are built; Phase 7 (integration and evaluation) is next. Progress and
+Phases 1 to 6 are built; Phase 7 (integration and evaluation) is in progress. Progress and
 every decision are in the design notes' Status and Change Log and Decision Log.
 
 ### Fixed interfaces
@@ -96,6 +103,6 @@ core/           models (DatabaseConnection, SchemaSnapshot), views, forms, servi
   static/
 agent/          types, config, connection, schema, generator, executor, pipeline
   validator/    base, rules (R1 to R11), engine, tests                   (Afraz)
-eval/           chinook_questions.yaml, attacks.yaml, test_benchmark.py
+eval/           chinook_questions.yaml, attacks.yaml, run.py (benchmarks), test_benchmark.py
 db_setup/       setup_databases.py, sql/ (app DB, read-only user, sensitive seed table)
 ```

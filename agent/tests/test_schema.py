@@ -83,7 +83,8 @@ def test_render_ddl_leaves_out_restricted_names(shop_url):
     ddl = render_ddl(introspect(open_engine(shop_url, CONFIG), CONFIG))
     assert "CREATE TABLE album (" in ddl
     assert "artist_id INTEGER NOT NULL REFERENCES artist(artist_id)" in ddl
-    assert "status VARCHAR(20) NOT NULL, -- e.g. 'cancelled', 'pending', 'shipped'" in ddl
+    assert "status VARCHAR(20) NOT NULL," in ddl
+    assert "cancelled" not in ddl and "-- e.g." not in ddl   # no row data to Gemini (D-046)
     assert "user_credentials" not in ddl and "api_token" not in ddl and "password" not in ddl
     assert "album_titles" not in ddl
 
@@ -98,7 +99,7 @@ def test_render_ddl_composite_keys_quoting_and_hidden_references():
     ddl = render_ddl(schema)
     assert 'CREATE TABLE "Order Lines" (' in ddl
     assert "PRIMARY KEY (order_id, line_no)" in ddl
-    assert "-- e.g. 'it''s'" in ddl
+    assert "it's" not in ddl and "it''s" not in ddl   # samples stay on the Schema page (D-046)
     assert "auth_user" not in ddl
 
 

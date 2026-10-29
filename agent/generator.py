@@ -6,8 +6,9 @@ comes back.
 
 What leaves the machine: the question, the schema DDL (restricted tables and
 columns already removed by `agent.schema.render_ddl`), earlier steps' questions
-and column names, and database error text on a correction.
-Never row data (D-028).
+and column names, and database error text on a correction, with quoted values
+removed (`scrub_values`). Never row data: not results (D-028), not sample values,
+not values quoted in errors (D-046).
 """
 
 from __future__ import annotations
@@ -50,8 +51,7 @@ DIALECT_NAMES = {Dialect.POSTGRESQL: "PostgreSQL", Dialect.MYSQL: "MySQL", Diale
 GENERATION_PROMPT = """\
 You are a SQL assistant for a {dialect} database.
 Write ONE read-only SELECT query that answers the question.
-Use only the tables and columns below. Use exact values from the
-sample-value comments when filtering text columns.
+Use only the tables and columns below.
 
 Schema:
 {schema_ddl}
@@ -89,6 +89,19 @@ Your previous query failed.
 Query: {failed_sql}
 Database error: {error}
 Write a corrected query. Same JSON format."""
+
+# A value the database quotes in an error can come from a row, e.g. PostgreSQL's
+# `invalid input syntax for type integer: "Rock"` when a cast meets a stored value.
+# Values follow a colon or the word "value"; names (`column "x" does not exist`,
+# MySQL's `Unknown column 'x'`) do not, so the correction still sees them.
+_QUOTED_VALUE = re.compile(r"""(:\s*|\bvalue\s+)(["'])(?:(?!\2).)*\2""", re.IGNORECASE)
+
+
+def scrub_values(error: str) -> str:
+    """The error's first line, with values the database quoted replaced by <value>."""
+    first_line = error.strip().splitlines()[0] if error.strip() else ""
+    return _QUOTED_VALUE.sub(lambda m: f"{m.group(1)}<value>", first_line)
+
 
 # --- Calling Gemini ----------------------------------------------------------------
 
@@ -195,7 +208,7 @@ def generation_prompt(
         plan_option=PLAN_OPTION.format(max_steps=max_steps) if allow_plan else "",
     )
     if failed_sql is not None:
-        prompt += CORRECTION.format(failed_sql=failed_sql, error=error or "")
+        prompt += CORRECTION.format(failed_sql=failed_sql, error=scrub_values(error or ""))
     return prompt
 
 

@@ -72,8 +72,8 @@ def test_ask_states_show_their_verdict(client, state, expected):
 @pytest.mark.parametrize("state,expected", [
     ("refused", ["REFUSED", "public.invoice · public.customer", "GRANT SELECT ON ALL TABLES"]),
     ("success", ["CLEARED", "The account is read-only."]),
-    ("error", ["Could not connect to the database.", "Connection refused"]),
-    ("empty", ["No connections yet.", "Don't connect a database whose column values are confidential."]),
+    ("error", ["Could not connect to the database. Check the host, port"]),
+    ("empty", ["No connections yet.", "No row data is ever sent: not results, not sample values."]),
 ])
 def test_connect_states_show_their_check(client, state, expected):
     html = client.get(reverse("connect"), {"state": state}).content.decode()
