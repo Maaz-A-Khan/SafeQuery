@@ -4,8 +4,25 @@ Ask questions about your own database in plain English. Gemini proposes SQL; a
 rule-based validator decides whether it may run; it runs through a read-only account.
 
 AI and Expert Systems, NED University. Team: Maaz (lead), Afraz, Sunil, Fouzan.
-The design notes (requirements, rule base, phases) are the source of truth; this
-README only covers setup and where to work.
+The design notes (requirements, rule base, decisions) are the source of truth; this
+README covers setup, tests and the code layout.
+
+## How it works
+
+1. **Generate.** Gemini gets the question and the schema structure: table and column
+   names, types and keys. Restricted tables and columns are left out, and **no row
+   data is ever sent**: no results, no sample values, no values quoted in errors.
+2. **Validate.** An expert system of eleven rules (R1 to R11) parses the SQL with
+   sqlglot and blocks writes, hidden statements, restricted data, system catalogs,
+   unlisted functions and runaway queries, explaining every block. It adds a
+   `LIMIT` if one is missing.
+3. **Execute.** Only the validated SQL runs, on an account the privilege check has
+   confirmed can only read, inside a read-only transaction, with a 5-second
+   timeout and a 1000-row cap. A database error goes back to Gemini for a
+   correction, up to 3 attempts; a block is never retried.
+
+Every question is recorded in the audit log (never its results), which the
+superuser reviews on the Log page.
 
 ## Setup
 
@@ -50,30 +67,19 @@ Benchmarks call Gemini, so they are a separate command, run at milestones only
 (paced to 14 calls a minute; a run cut short by the quota resumes where it stopped):
 
 ```powershell
-python eval/run.py correctness           # 30 Chinook questions -> eval/results/correctness.csv
-python eval/run.py security --run 1      # 15 attacks, everything on (run 2: validator off)
+python eval/run.py correctness              # 30 Chinook questions -> eval/results/correctness.csv
+python eval/run.py security --run 1         # 15 attacks, everything on (run 2: validator off)
+python eval/run.py security --run 2 --direct   # each attack's own SQL in place of Gemini
+python eval/run.py security --run 3 --direct --url-env SCRATCH_URL   # every layer off, throwaway copy only
 ```
+
+Run 3 needs a throwaway copy of Chinook whose database name contains `scratch`,
+with an account that owns the tables; it refuses any other database. Results are
+in the design notes' Evaluation Plan.
 
 pytest creates its own test database, so the `safequery` role has `CREATEDB`.
 
-## Who works where
-
-Work only inside your own folders, on your own branch. Changes reach `main` only
-through a pull request that Maaz reviews. A branch is done when its tests pass.
-
-| Member | Folders | What is there |
-| :--- | :--- | :--- |
-| Afraz | `agent/validator/`, `eval/attacks.yaml` | Rules R1 to R11 in `rules.py`, the staged engine in `engine.py`, a test file per rule plus `test_engine.py` and the attack corpus (`attack_corpus.py`, 1,883 attacks, 87 benign queries) |
-| Sunil | `core/audit/` | `QueryLog` and `QueryCache`, `log_request`, the cache, anomaly flags, the superuser-only Log pages |
-| Fouzan | `core/templates/`, `core/static/` | Every page in the Clearance design; each page's context is documented in `core/sample_context.py` |
-| Maaz | `agent/` (except `validator/`), `core/` (rest), `eval/` questions, `db_setup/` | Connection and schema (`connection.py`, `schema.py`), the Gemini client, executor and pipeline (`generator.py`, `executor.py`, `pipeline.py`), the Ask page and CSV download |
-
-Phases 1 to 6 are built; Phase 7 (integration and evaluation) is in progress. Progress and
-every decision are in the design notes' Status and Change Log and Decision Log.
-
-### Fixed interfaces
-
-Agreed in Phase 1. Change them only after the whole team agrees.
+## Interfaces
 
 - **Shared types** (`agent/types.py`): `Schema`, `Verdict`, `RuleHit`, `Attempt`,
   `Result`, `Outcome`, `StoppedBy`, `Target`.
@@ -88,7 +94,8 @@ Agreed in Phase 1. Change them only after the whole team agrees.
 - **Templates**: the dictionaries in `core/sample_context.py`. Preview any state
   with `?state=`, e.g. `/ask/1/?state=blocked`, `/connect/?state=refused`, `/log/?state=empty`.
 - **Settings**: limits, lists and safety switches in `agent/config.py`, built
-  in `safequery/settings.py` as `SAFEQUERY`. The switches are off only in the ablation run.
+  in `safequery/settings.py` as `SAFEQUERY`. The switches are changed only by the
+  ablation runs in `eval/run.py`.
 
 `agent/` never imports Django, so it can be tested on its own.
 
@@ -98,11 +105,11 @@ Agreed in Phase 1. Change them only after the whole team agrees.
 manage.py, requirements.txt, .env.example, pytest.ini
 safequery/      settings, urls
 core/           models (DatabaseConnection, SchemaSnapshot), views, forms, services, sample_context
-  audit/        QueryLog, QueryCache, log_request, cache, Log views        (Sunil)
-  templates/    all pages                                                (Fouzan)
+  audit/        QueryLog, QueryCache, log_request, cache, Log views
+  templates/    all pages
   static/
 agent/          types, config, connection, schema, generator, executor, pipeline
-  validator/    base, rules (R1 to R11), engine, tests                   (Afraz)
+  validator/    base, rules (R1 to R11), engine, tests, attack_corpus (1,883 attacks, 87 benign queries)
 eval/           chinook_questions.yaml, attacks.yaml, run.py (benchmarks), test_benchmark.py
 db_setup/       setup_databases.py, sql/ (app DB, read-only user, sensitive seed table)
 ```
