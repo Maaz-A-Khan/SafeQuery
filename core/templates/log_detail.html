@@ -2,11 +2,68 @@
 {# Owner: Fouzan (template), Sunil (view). Context: core/sample_context.py log_detail() #}
 {% block title %}Log entry · SafeQuery{% endblock %}
 {% block content %}
-<h1>{{ entry.question }}</h1>
-<p>Placeholder page (Phase 1). Verdict: {{ entry.verdict }}.</p>
-<ol>
-  {% for a in entry.attempts %}
-    <li><pre>{{ a.sql }}</pre>{{ a.verdict }}{% if a.error %} · {{ a.error }}{% endif %}</li>
-  {% endfor %}
-</ol>
+<p><a href="{% url 'log' %}">← Back to the log</a></p>
+
+<div class="page-head">
+  <div>
+    <span class="eyebrow">{{ entry.created_at|date:"d M Y H:i" }} · {{ entry.connection_name }}</span>
+    <h1>{{ entry.question }}</h1>
+  </div>
+  {% if entry.verdict == "answered" %}<span class="stamp cleared"><span class="stamp-word">CLEARED</span></span>
+  {% elif entry.verdict == "blocked" %}<span class="stamp refused"><span class="stamp-word">REFUSED</span></span>
+  {% elif entry.stopped_by == "model" %}<span class="stamp neutral"><span class="stamp-word">NO ANSWER</span></span>
+  {% else %}<span class="stamp neutral"><span class="stamp-word">FAILED</span></span>{% endif %}
+</div>
+
+<div class="meta-line">
+  <span>stopped by: {{ entry.stopped_by }}</span>
+  <span>{{ entry.attempt_count }} attempt{{ entry.attempt_count|pluralize }}</span>
+  <span>rows: {{ entry.rows_returned|default_if_none:"not run" }}</span>
+  {% if entry.exec_ms is not None %}<span>{{ entry.exec_ms }} ms</span>{% endif %}
+  {% if entry.from_cache %}<span>SQL from the cache</span>{% endif %}
+  {% for flag in entry.anomaly_flags %}<span class="flag warn">{{ flag }}</span>{% endfor %}
+</div>
+
+{% if entry.message %}
+  <section class="notice" aria-label="Why it was not answered">
+    <span class="eyebrow">Shown to the user</span>
+    <p>{{ entry.message }}</p>
+  </section>
+{% endif %}
+
+{% if entry.plan %}
+  <section class="notice" aria-label="Plan">
+    <span class="eyebrow">Split into steps</span>
+    <ol>{% for step in entry.plan %}<li>{{ step }}</li>{% endfor %}</ol>
+  </section>
+{% endif %}
+
+{% if entry.final_sql %}
+  <section class="slip" aria-label="Final SQL">
+    <div class="slip-head eyebrow"><span>Final SQL</span></div>
+    <pre>{{ entry.final_sql }}</pre>
+  </section>
+{% endif %}
+
+<section class="stack" aria-labelledby="attempts-heading">
+  <h2 id="attempts-heading" class="eyebrow">Every attempt</h2>
+  <ol class="attempt-list">
+    {% for a in entry.attempts %}
+      <li>
+        <div class="meta-line">
+          <span>Attempt {{ a.number }}</span>
+          {% if a.verdict %}<span class="tag {% if a.verdict == 'ALLOW' %}cleared{% else %}refused{% endif %}">{{ a.verdict }}</span>{% endif %}
+          {% if a.rules_fired %}<span>{{ a.rules_fired|join:" " }}</span>{% endif %}
+          {% if a.exec_ms is not None %}<span>{{ a.exec_ms }} ms</span>{% endif %}
+        </div>
+        {% if a.explanation %}<span>{{ a.explanation }}</span>{% endif %}
+        {% if a.sql %}<pre>{{ a.sql }}</pre>{% else %}<span class="muted">Gemini proposed no SQL.</span>{% endif %}
+        {% for m in a.messages %}<span class="muted">{{ m }}</span>{% endfor %}
+        {% if a.error %}<span class="error">{{ a.error }}</span>{% endif %}
+      </li>
+    {% empty %}
+      <li class="muted">No attempts: nothing was sent to the database.</li>
+    {% endfor %}
+  </ol>
+</section>
 {% endblock %}

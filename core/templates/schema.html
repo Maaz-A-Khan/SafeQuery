@@ -1,12 +1,59 @@
 {% extends "base.html" %}
-{# Owner: Fouzan. Context: core/sample_context.py schema() #}
+{# Owner: Fouzan. Context: core/sample_context.py schema().
+   POSTs action ("save" | "refresh"), restricted_tables, restricted_columns ("table.column"). #}
 {% block title %}Schema · SafeQuery{% endblock %}
 {% block content %}
-<h1>Schema: {{ connection.name }}</h1>
-<p>Placeholder page (Phase 1). Captured {{ captured_at }}.</p>
-<ul>
-  {% for t in tables %}
-    <li>{{ t.name }}{% if t.restricted %} (restricted){% endif %}: {{ t.columns|length }} columns</li>
-  {% endfor %}
-</ul>
+<form method="post" class="schema-form">
+  {% csrf_token %}
+  <div class="page-head">
+    <div>
+      <h1>Schema of {{ connection.name }}</h1>
+      <p>Tick a table or column to withhold it. Withheld names are never shown to Gemini, never sampled, and any query that touches them is refused by rule R6.</p>
+    </div>
+    <div class="schema-actions">
+      <span class="meta-line">Read {{ captured_at|timesince }} ago</span>
+      <button class="button secondary" type="submit" name="action" value="refresh">Re-read the database</button>
+      <button class="button" type="submit" name="action" value="save">Save changes</button>
+    </div>
+  </div>
+
+  {% if error %}
+    <section class="notice" role="alert">
+      <h2>Could not re-read the database.</h2>
+      <p class="driver-error">{{ error }}</p>
+    </section>
+  {% endif %}
+
+  <div class="table-grid">
+    {% for t in tables %}
+      <section class="slip table-slip{% if t.restricted %} withheld{% endif %}" aria-label="Table {{ t.name }}">
+        <div class="table-slip-head">
+          <span class="table-name">{{ t.name }}</span>
+          <label class="check">
+            <input type="checkbox" name="restricted_tables" value="{{ t.name }}"{% if t.restricted %} checked{% endif %}>
+            Withhold table
+          </label>
+        </div>
+        {% if t.restricted %}
+          <div class="stamp refused" role="img" aria-label="Table withheld"><span class="stamp-word">WITHHELD</span></div>
+        {% endif %}
+        <div class="columns">
+          {% for c in t.columns %}
+            <div class="column-row{% if c.restricted %} withheld{% endif %}">
+              <input type="checkbox" name="restricted_columns" value="{{ t.name }}.{{ c.name }}"{% if c.restricted %} checked{% endif %} aria-label="Withhold {{ t.name }}.{{ c.name }}">
+              <div class="col-detail">
+                <span class="col-name">{{ c.name }}</span>
+                {% if c.sample_values %}<span class="samples">e.g. {{ c.sample_values|join:", " }}</span>{% endif %}
+                {% if c.foreign_key %}<span class="fk">→ {{ c.foreign_key }}</span>{% endif %}
+              </div>
+              <span class="col-type">{{ c.type }}{% if c.primary_key %} · PK{% endif %}{% if not c.nullable %} · NOT NULL{% endif %}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% empty %}
+      <p class="muted">This database has no tables in its default schema.</p>
+    {% endfor %}
+  </div>
+</form>
 {% endblock %}

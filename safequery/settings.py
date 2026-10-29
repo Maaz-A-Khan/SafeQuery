@@ -63,6 +63,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "core.context_processors.current_connection",
             ],
         },
     },
@@ -94,10 +95,10 @@ LOGOUT_REDIRECT_URL = "connect"
 
 # --- SafeQuery ---------------------------------------------------------------
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")   # needed from Phase 6
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 FERNET_KEY = os.environ.get("FERNET_KEY", "")           # needed from Phase 5
 
 # Thresholds: timeout, row cap, join limit, cost ceiling, lists. See agent/config.py.
 SAFEQUERY = AgentConfig(
-    gemini=GeminiConfig(model=os.environ.get("GEMINI_MODEL", GeminiConfig.model)),
+    gemini=GeminiConfig(model=os.environ.get("GEMINI_MODEL", GeminiConfig.model), api_key=GEMINI_API_KEY),
 )

@@ -30,20 +30,27 @@ class ValidatorConfig:
     # R8 is an ALLOW list: any function not listed is blocked (fails closed, NFR-S3).
     # A deny list misses functions such as query_to_xml() and set_config(), which
     # run SQL or change settings from inside a SELECT. Lower-case SQL names.
-    # TODO(Afraz): finalise; sqlglot types common functions (exp.Count, exp.Upper, ...)
-    # and puts unknown ones in exp.Anonymous.
+    # Every name here is a pure, read-only built-in; schema-qualified calls are
+    # always blocked. sqlglot types common functions (exp.Count, exp.Upper, ...) and
+    # puts unknown ones in exp.Anonymous; see rules._ALIASES for spelling differences.
     allowed_functions: frozenset[str] = frozenset({
         # aggregates
-        "count", "sum", "avg", "min", "max",
+        "count", "sum", "avg", "min", "max", "string_agg", "group_concat",
+        "stddev", "variance", "percentile_cont", "percentile_disc",
+        # window functions
+        "row_number", "rank", "dense_rank", "ntile", "percent_rank", "cume_dist",
+        "lag", "lead", "first_value", "last_value",
         # null handling and comparison
         "coalesce", "nullif", "ifnull", "greatest", "least",
         # text
         "upper", "lower", "trim", "ltrim", "rtrim", "length", "char_length",
-        "substring", "substr", "concat", "replace", "left", "right", "position",
+        "substring", "substr", "concat", "concat_ws", "replace", "left", "right",
+        "position", "initcap",
         # numbers
-        "round", "abs", "floor", "ceil", "ceiling",
+        "round", "abs", "floor", "ceil", "ceiling", "power", "sqrt", "sign",
         # dates
-        "date_trunc", "extract", "date_part", "strftime", "date", "year", "month",
+        "date_trunc", "extract", "date_part", "strftime", "date", "year", "month", "day",
+        "to_char", "age", "julianday", "datediff",
         "now", "current_date", "current_timestamp",
         # types and conditionals
         "cast", "case", "if",
@@ -58,10 +65,13 @@ class ExecutorConfig:
 
 @dataclass(frozen=True)
 class GeminiConfig:
-    model: str = "gemini-2.5-flash"    # confirm the current free-tier model (open decision)
+    model: str = "gemini-3.5-flash-lite"   # D-040
     temperature: float = 0.0
-    max_attempts: int = 3              # FR-Q5, NFR-R2
-    max_plan_steps: int = 4            # FR-Q8 (stretch)
+    max_attempts: int = 3              # FR-Q5, NFR-R2: per step
+    max_plan_steps: int = 4            # FR-Q8
+    max_step_values: int = 500         # values carried from one step to the next (D-028)
+    request_timeout_s: float = 60.0    # a Gemini call that takes longer counts as unavailable
+    api_key: str = field(default="", repr=False)   # GEMINI_API_KEY; repr=False keeps it out of logs
 
 
 @dataclass(frozen=True)

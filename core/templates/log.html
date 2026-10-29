@@ -2,13 +2,77 @@
 {# Owner: Fouzan (template), Sunil (view). Context: core/sample_context.py log(). States: ?state=empty #}
 {% block title %}Log · SafeQuery{% endblock %}
 {% block content %}
-<h1>Log</h1>
-<p>Placeholder page (Phase 1).</p>
-<ul>
-  {% for e in entries %}
-    <li><a href="{% url 'log_detail' e.id %}">{{ e.created_at }}</a> · {{ e.verdict }} · {{ e.question }}</li>
-  {% empty %}
-    <li>No questions yet.</li>
-  {% endfor %}
-</ul>
+<div class="page-head">
+  <div>
+    <h1>Log</h1>
+    <p>Every question, its SQL and its verdict. Results are never stored, only row counts.</p>
+  </div>
+  <form class="log-filters" method="get">
+    <div class="field">
+      <label for="f-verdict">Verdict</label>
+      <select id="f-verdict" name="verdict">
+        <option value="">All</option>
+        {% for v in verdict_choices %}<option value="{{ v }}"{% if filters.verdict == v %} selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-rule">Rule fired</label>
+      <select id="f-rule" name="rule">
+        <option value="">Any</option>
+        {% for r in rule_choices %}<option value="{{ r }}"{% if filters.rule == r %} selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+    </div>
+    <button class="button" type="submit">Filter</button>
+  </form>
+</div>
+
+<div class="table-scroll">
+  <table class="data-table log-table">
+    <thead>
+      <tr>
+        <th>When</th><th>Question</th><th>Verdict</th><th>Blocked by</th>
+        <th class="num">Attempts</th><th class="num">Rows</th><th class="num">ms</th><th>Flags</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+        <tr>
+          <td class="when">{{ e.created_at|date:"d M H:i" }}</td>
+          <td class="question">
+            <a href="{% url 'log_detail' e.id %}">{{ e.question }}</a>
+            <span class="muted">{{ e.connection_name }} ·
+              {% if e.stopped_by == "validator" %}stopped by the validator
+              {% elif e.stopped_by == "model" %}Gemini wrote no query
+              {% elif e.stopped_by == "database" and e.attempt_count %}the database returned an error on every attempt
+              {% elif e.stopped_by == "database" %}the database could not be reached
+              {% elif e.stopped_by == "service" %}no answer from the AI service
+              {% elif e.from_cache %}SQL reused from the cache
+              {% elif e.attempt_count > 1 %}corrected after a database error
+              {% else %}answered first time{% endif %}</span>
+          </td>
+          <td>
+            {% if e.verdict == "answered" %}<span class="stamp small cleared"><span class="stamp-word">CLEARED</span></span>
+            {% elif e.verdict == "blocked" %}<span class="stamp small refused"><span class="stamp-word">REFUSED</span></span>
+            {% elif e.stopped_by == "model" %}<span class="stamp small neutral"><span class="stamp-word">NO ANSWER</span></span>
+            {% else %}<span class="stamp small neutral"><span class="stamp-word">FAILED</span></span>{% endif %}
+          </td>
+          <td class="mono">{% if e.blocked_by %}{{ e.blocked_by|join:" " }}{% elif not e.limit_added %}—{% endif %}{% if e.limit_added %}<span class="muted rewrite-tag">LIMIT added</span>{% endif %}</td>
+          <td class="num">{{ e.attempt_count }}</td>
+          <td class="num">{{ e.rows_returned|default_if_none:"—" }}</td>
+          <td class="num">{{ e.exec_ms|default_if_none:"—" }}</td>
+          <td>
+            {% for flag in e.anomaly_flags %}
+              {% if flag == "repeated_blocks" %}<span class="flag warn">3rd block in 10 min</span>
+              {% elif flag == "many_tables" %}<span class="flag warn">over 5 tables</span>
+              {% elif flag == "row_spike" %}<span class="flag">row spike</span>
+              {% else %}<span class="flag">{{ flag }}</span>{% endif %}
+            {% endfor %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8" class="muted">No questions yet{% if filters.verdict or filters.rule %} match these filters{% endif %}.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}
