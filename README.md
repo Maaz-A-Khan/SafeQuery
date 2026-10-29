@@ -3,7 +3,7 @@
 Ask questions about your own database in plain English. Gemini proposes SQL; a
 rule-based validator decides whether it may run; it runs through a read-only account.
 
-AI and Expert Systems, NED University. Team: Maaz (lead), Afraz, Sunil, Fouzan.
+
 The design notes (requirements, rule base, decisions) are the source of truth; this
 README covers setup, tests and the code layout.
 
