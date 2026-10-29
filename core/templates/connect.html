@@ -12,7 +12,7 @@
     </div>
 
     <section class="notice warning" aria-label="What is sent to Gemini">
-      <p>The table structure and a few sample values from each connected database are sent to Google's Gemini API. Don't connect a database whose column values are confidential.</p>
+      <p>Only the table structure (table and column names, types and keys) is sent to Google's Gemini API. No row data is ever sent: not results, not sample values. Table and column names themselves must not be confidential.</p>
     </section>
 
     <form class="connect-form" method="post">

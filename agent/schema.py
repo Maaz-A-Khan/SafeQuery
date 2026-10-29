@@ -153,13 +153,10 @@ def _ident(name: str, dialect: Dialect) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def _literal(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
-
-
 def render_ddl(schema: Schema) -> str:
-    """The schema as CREATE TABLE statements, sample values in comments, for the prompt.
-    Restricted tables and columns are left out."""
+    """The schema as CREATE TABLE statements, for the prompt. Restricted tables and
+    columns are left out, and so are sample values: no row data goes to Gemini
+    (D-046). The samples are only shown on the Schema page."""
     d = schema.dialect
     statements = []
     for name, t in schema.tables.items():
@@ -189,8 +186,7 @@ def render_ddl(schema: Schema) -> str:
                 parts.append("PRIMARY KEY")
             if c.name in inline_fk:
                 parts.append(f"REFERENCES {inline_fk[c.name]}")
-            comment = f"-- e.g. {', '.join(_literal(v) for v in c.sample_values)}" if c.sample_values else ""
-            lines.append((" ".join(parts), comment))
+            lines.append((" ".join(parts), ""))
         if len(pk) > 1:
             lines.append((f"PRIMARY KEY ({', '.join(_ident(c, d) for c in pk)})", ""))
         lines += [(fk, "") for fk in table_fks]

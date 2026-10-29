@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from agent import pipeline
 from agent.connection import (
-    UnsupportedDatabase, check_privileges, decrypt_url, encrypt_url, open_engine, safe_error,
+    UnsupportedDatabase, check_privileges, decrypt_url, encrypt_url, mask_url, open_engine, safe_error,
 )
 from agent.executor import ExecutionError, execute, explainer
 from agent.schema import introspect
@@ -44,6 +44,9 @@ class ConnectionCache:
 # --- Connect (FR-C1 to FR-C8) ---------------------------------------------------
 
 
+CONNECT_FAILED = "Could not connect to the database. Check the host, port, database name, user and password."
+
+
 def _check(ok: bool, message: str, error: str = "", writable_tables=(), grant_sql: str = "") -> dict:
     """The `check` dictionary of the Connect page (see sample_context.connect)."""
     return {"ok": ok, "message": message, "error": error,
@@ -69,7 +72,10 @@ def connect_database(name: str, url: str) -> tuple[dict, DatabaseConnection | No
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
         except SQLAlchemyError as exc:
-            return _check(False, "Could not connect to the database.", safe_error(exc, url)), None
+            # One message for every failure: the driver's text would tell "no server
+            # there" from "wrong password", turning this page into a port scanner.
+            logger.warning("Connect failed for %s: %s", mask_url(url), safe_error(exc, url))
+            return _check(False, CONNECT_FAILED), None
 
         dialect = _dialect_of(engine)
         readonly_verified = False
