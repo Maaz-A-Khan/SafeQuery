@@ -11,23 +11,23 @@
   <link rel="stylesheet" href="{% static 'core/style.css' %}">
 </head>
 <body>
-  {% with page=request.resolver_match.url_name %}
+  {% with page=request.resolver_match.url_name nav=connection|default:nav_connection %}
   <header class="site-header">
     <div class="wrap">
       <a class="brand" href="{% url 'connect' %}">SAFEQUERY</a>
       <nav class="site-nav" aria-label="Main">
         <a href="{% url 'connect' %}"{% if page == "connect" %} aria-current="page"{% endif %}>Connect</a>
-        {% if connection %}
-          <a href="{% url 'schema' connection.id %}"{% if page == "schema" %} aria-current="page"{% endif %}>Schema</a>
-          <a href="{% url 'ask' connection.id %}"{% if page == "ask" %} aria-current="page"{% endif %}>Ask</a>
+        {% if nav %}{# the page's connection, else the last one used #}
+          <a href="{% url 'schema' nav.id %}"{% if page == "schema" %} aria-current="page"{% endif %}>Schema</a>
+          <a href="{% url 'ask' nav.id %}"{% if page == "ask" %} aria-current="page"{% endif %}>Ask</a>
         {% endif %}
         {% if user.is_superuser %}{# D-033: the Log is for the superuser only #}
           <a href="{% url 'log' %}"{% if page == "log" or page == "log_detail" %} aria-current="page"{% endif %}>Log</a>
         {% endif %}
       </nav>
       <div class="header-meta">
-        {% if connection %}
-          <span>{{ connection.name }}{% if connection.readonly_verified %} · read-only account{% endif %}</span>
+        {% if nav %}
+          <span>{{ nav.name }}{% if nav.readonly_verified %} · read-only account{% endif %}</span>
         {% endif %}
         {% if user.is_authenticated %}
           <span>Signed in as {{ user.get_username }}</span>

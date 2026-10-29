@@ -62,6 +62,18 @@ def test_ask_page_before_a_question(client, connection):
     assert response.context["result"] is None and response.context["connection"]["name"] == "Shop"
 
 
+def test_nav_keeps_schema_and_ask_after_leaving_them(client, connection):
+    def nav(response):
+        html = response.content.decode()
+        return html[html.index('<nav class="site-nav"'):html.index("</nav>")]
+
+    assert "/ask/" not in nav(client.get(reverse("connect")))
+    client.get(reverse("ask", args=[connection.id]))
+    links = nav(client.get(reverse("connect")))
+    assert reverse("ask", args=[connection.id]) in links
+    assert reverse("schema", args=[connection.id]) in links
+
+
 def test_answered_question_shows_rows_logs_and_links_csv(client, connection, gemini):
     gemini.append("SELECT order_id, status FROM orders ORDER BY order_id")
     response = ask(client, connection)

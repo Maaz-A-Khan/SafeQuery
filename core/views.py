@@ -14,6 +14,7 @@ from django.views.decorators.http import require_GET
 
 from agent.connection import mask_url
 from core import sample_context, services
+from core.context_processors import SESSION_KEY
 from core.audit.models import QueryLog
 from core.forms import AskForm, ConnectForm
 from core.models import DatabaseConnection
@@ -47,6 +48,8 @@ def connect(request):
         if form.is_valid():
             name, url = form.cleaned_data["name"], form.cleaned_data["url"]
             check, connection = services.connect_database(name, url)
+            if connection:
+                request.session[SESSION_KEY] = connection.id
             # Never send the password back to the browser (FR-C3).
             form = ConnectForm() if connection else ConnectForm(data={"name": name, "url": mask_url(url)})
     connections = [connection_dict(c) for c in DatabaseConnection.objects.all()]
@@ -59,6 +62,7 @@ def schema(request, connection_id: int):
     if _state(request):
         return render(request, "schema.html", sample_context.schema(_state(request)))
     connection = get_object_or_404(DatabaseConnection, pk=connection_id)
+    request.session[SESSION_KEY] = connection.id
     error = None
     if request.method == "POST":
         if request.POST.get("action") == "refresh":
@@ -99,6 +103,7 @@ def ask(request, connection_id: int):
         ctx["form"] = AskForm(initial={"question": ctx["question"]})
         return render(request, "ask.html", ctx)
     connection = get_object_or_404(DatabaseConnection, pk=connection_id)
+    request.session[SESSION_KEY] = connection.id
     form, result, csv_url = AskForm(), None, None
     if request.method == "POST":
         form = AskForm(request.POST)
