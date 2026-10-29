@@ -17,7 +17,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 
-copy .env.example .env         # then fill in DJANGO_SECRET_KEY, DATABASE_URL password, FERNET_KEY
+copy .env.example .env         # then fill in DJANGO_SECRET_KEY, DATABASE_URL password, FERNET_KEY, GEMINI_API_KEY
 python db_setup/setup_databases.py postgres   # app DB + Chinook + read-only user; asks for the postgres password
 python db_setup/setup_databases.py sqlite     # Chinook as a SQLite file
 
@@ -34,10 +34,15 @@ request from another address, even if the server is started on `0.0.0.0`.
 Note: Chinook's tables are `snake_case` in PostgreSQL (`invoice_line`) and
 `PascalCase` in SQLite (`InvoiceLine`).
 
+**Gemini quota.** The free tier for `gemini-3.5-flash-lite` allows 15 requests a
+minute and about 500 a day (the real figure for your key is on
+aistudio.google.com/rate-limit). Every question asked on the Ask page uses at
+least one; tests never call Gemini.
+
 ## Tests
 
 ```powershell
-pytest                                   # everything; skipped tests are phases not built yet
+pytest                                   # everything; never calls Gemini
 pytest agent/validator                   # one area
 $env:SAFEQUERY_RUN_BENCHMARK="1"; pytest eval   # benchmarks, calls Gemini: milestones only
 ```
@@ -49,12 +54,15 @@ pytest creates its own test database, so the `safequery` role has `CREATEDB`.
 Work only inside your own folders, on your own branch. Changes reach `main` only
 through a pull request that Maaz reviews. A branch is done when its tests pass.
 
-| Member | Folders | Start from |
+| Member | Folders | What is there |
 | :--- | :--- | :--- |
-| Afraz | `agent/validator/`, `eval/attacks.yaml` | `rules.py` (one class per rule, every `check` is a TODO), `engine.py` (`validate` is a stub that allows everything; its docstring is the contract), tests in `agent/validator/tests/` (remove each file's `skip` as the rule is built) |
-| Sunil | `core/audit/` | `service.py` (`log_request`, `cache_lookup`, `cache_save`), `models.py` (`QueryLog`, `QueryCache`), `views.py` (Log page; keep the superuser check), tests in `core/audit/tests/` |
-| Fouzan | `core/templates/`, `core/static/` | the placeholder templates; every page's context is documented in `core/sample_context.py` |
-| Maaz | `agent/` (except `validator/`), `core/` (rest), `eval/` questions, `db_setup/` | `agent/connection.py`, `agent/schema.py` (Phase 5), then `generator.py`, `executor.py`, `pipeline.py` (Phase 6) |
+| Afraz | `agent/validator/`, `eval/attacks.yaml` | Rules R1 to R11 in `rules.py`, the staged engine in `engine.py`, a test file per rule plus `test_engine.py` and the attack corpus (`attack_corpus.py`, 1,883 cases) |
+| Sunil | `core/audit/` | `QueryLog` and `QueryCache`, `log_request`, the cache, anomaly flags, the superuser-only Log pages |
+| Fouzan | `core/templates/`, `core/static/` | Every page in the Clearance design; each page's context is documented in `core/sample_context.py` |
+| Maaz | `agent/` (except `validator/`), `core/` (rest), `eval/` questions, `db_setup/` | Connection and schema (`connection.py`, `schema.py`), the Gemini client, executor and pipeline (`generator.py`, `executor.py`, `pipeline.py`), the Ask page and CSV download |
+
+Phases 1 to 6 are built; Phase 7 (integration and evaluation) is next. Progress and
+every decision are in the design notes' Status and Change Log and Decision Log.
 
 ### Fixed interfaces
 
@@ -65,10 +73,11 @@ Agreed in Phase 1. Change them only after the whole team agrees.
 - **Validator**: `agent.validator.validate(sql, schema, dialect, *, config, explain) -> Verdict`.
   Rules subclass `agent.validator.base.Rule` and run by `Stage`: PARSE, TREE,
   REWRITE (R11), then COST (R10), so the cost check sees the added `LIMIT`.
-- **Audit**: `log_request(connection_id, result)`, `cache_lookup(connection_id, question, schema_hash)`,
+- **Audit**: `log_request(connection_id, result) -> log id`, `cache_lookup(connection_id, question, schema_hash)`,
   `cache_save(connection_id, question, schema_hash, sql)` in `core/audit/service.py`.
-- **Views → agent**: `core.services.answer_question(connection_id, question) -> Result`.
-  It calls the Django-free `agent.pipeline.run(target, question, config, cache)`.
+- **Views → agent**: `core.services.answer_question(connection_id, question) -> (Result, log id)`.
+  It calls the Django-free `agent.pipeline.run(target, question, config, cache)`;
+  the log id is for the CSV link.
 - **Templates**: the dictionaries in `core/sample_context.py`. Preview any state
   with `?state=`, e.g. `/ask/1/?state=blocked`, `/connect/?state=refused`, `/log/?state=empty`.
 - **Settings**: limits, lists and safety switches in `agent/config.py`, built

@@ -61,7 +61,7 @@ def test_ipv6_loopback_is_allowed(client):
     ("blocked", ["REFUSED", "RULES R3 · R4", "This system can only read data, not change it."]),
     ("failed", ["FAILED", "column &quot;revenue&quot; does not exist"]),
     ("cannot_answer", ["NO ANSWER", "no weather data"]),
-    ("unavailable", ["UNAVAILABLE", "The AI service is unavailable"]),
+    ("unavailable", ["UNAVAILABLE", "No answer from Gemini", "per-minute free-tier limit"]),
 ])
 def test_ask_states_show_their_verdict(client, state, expected):
     html = client.get(reverse("ask", args=[1]), {"state": state}).content.decode()

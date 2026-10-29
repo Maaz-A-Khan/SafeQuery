@@ -150,3 +150,25 @@ def test_network_failure_is_unavailable(monkeypatch):
     monkeypatch.setattr(genai, "Client", lambda **kw: type("C", (), {"models": _FakeModels(TimeoutError("slow"))})())
     with pytest.raises(ModelUnavailable, match="unavailable"):
         generator._call("prompt", CONFIG)
+
+
+def test_daily_quota_is_told_apart_from_the_per_minute_one(monkeypatch):
+    from google import genai
+    from google.genai import errors
+
+    def quota(quota_id):
+        return errors.APIError(429, {"error": {"code": 429, "message": "x", "status": "RESOURCE_EXHAUSTED", "details": [
+            {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [{"quotaId": quota_id}]}]}})
+
+    for quota_id, expected in [("GenerateRequestsPerDayPerProjectPerModel-FreeTier", "daily free-tier limit"),
+                               ("GenerateRequestsPerMinutePerProjectPerModel-FreeTier", "per-minute free-tier limit")]:
+        monkeypatch.setattr(genai, "Client", lambda **kw: type("C", (), {"models": _FakeModels(quota(quota_id))})())
+        with pytest.raises(ModelUnavailable, match=expected):
+            generator._call("prompt", CONFIG)
+
+
+def test_prompt_forbids_substituting_withheld_columns(replies):
+    sent, queue = replies
+    queue.append('{"sql": "SELECT 1", "explanation": "x"}')
+    generator.generate("q", DDL, Dialect.SQLITE, CONFIG)
+    assert "Never substitute a different column" in sent[0]

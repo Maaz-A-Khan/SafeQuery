@@ -18,7 +18,7 @@
   <p class="empty-hint">Ask in plain English. Gemini writes the SQL, eleven safety rules check it, and only then does it run, on an account that can only read.</p>
 
 {% elif result.outcome == "answered" %}
-  <div class="result">
+  <div class="result answered">
     <section class="slip" aria-label="SQL and verdict">
       <div class="slip-head eyebrow">
         <span>{% if result.from_cache %}SQL reused from the cache{% else %}SQL proposed by Gemini{% endif %}</span>
@@ -116,12 +116,14 @@
     <section class="result-side" role="status" aria-label="No answer">
       {% if result.stopped_by == "model" %}
         <span class="stamp small neutral"><span class="stamp-word">NO ANSWER</span></span>
-        <h2>This can't be answered from {{ connection.name }}.</h2>
+        <h2>Gemini wrote no query, so nothing was run.</h2>
       {% elif result.stopped_by == "service" %}
         <span class="stamp small neutral"><span class="stamp-word">UNAVAILABLE</span></span>
-        <h2>Gemini didn't respond, so nothing was run.</h2>
-      {% else %}
+        <h2>No answer from Gemini, so nothing was run.</h2>
+      {% elif result.attempt_count %}
         <h2>No answer after {{ result.attempt_count }} attempt{{ result.attempt_count|pluralize }}.</h2>
+      {% else %}
+        <h2>The database could not be reached, so nothing was run.</h2>
       {% endif %}
       <p class="note">{{ result.message }}</p>
       {% if result.stopped_by == "database" %}

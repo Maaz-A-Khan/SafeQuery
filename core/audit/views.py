@@ -8,6 +8,8 @@ from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import get_object_or_404, render
 
 from agent.types import Outcome
+from agent.validator.base import Stage
+from agent.validator.rules import ALL_RULES
 from core import sample_context
 from core.audit.models import QueryLog
 
@@ -16,6 +18,9 @@ superuser_required = user_passes_test(lambda u: u.is_superuser)
 RULE_CHOICES = [f"R{i}" for i in range(1, 12)]
 VERDICT_CHOICES = [o.value for o in Outcome]
 LOG_PAGE_LIMIT = 500   # newest entries shown; older ones stay in the database and admin
+# Rules that edit the SQL instead of blocking it (R11 adds LIMIT). Shown apart from
+# blocking rules so an answered row doesn't look like a violation.
+REWRITE_RULES = frozenset(r.id for r in ALL_RULES if r.stage == Stage.REWRITE)
 
 
 def _entry_dict(e: QueryLog) -> dict:
@@ -27,7 +32,10 @@ def _entry_dict(e: QueryLog) -> dict:
         "verdict": e.verdict,
         "stopped_by": e.stopped_by,
         "from_cache": e.from_cache,
+        "message": e.message,
         "rules_fired": e.rules_fired,
+        "blocked_by": [r for r in e.rules_fired if r not in REWRITE_RULES],
+        "limit_added": any(r in REWRITE_RULES for r in e.rules_fired),
         "attempt_count": e.attempt_count,
         "rows_returned": e.rows_returned,
         "exec_ms": e.exec_ms,

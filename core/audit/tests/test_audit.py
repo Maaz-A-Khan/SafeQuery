@@ -97,6 +97,17 @@ def test_log_filters_by_verdict_and_rule(admin_client, conn):
     assert len(everything) == 2
 
 
+def test_log_shows_r11_as_a_rewrite_not_a_block(admin_client, conn):
+    log_request(conn.id, blocked())
+    log_request(conn.id, answered(1))
+    QueryLog.objects.filter(verdict="answered").update(rules_fired=["R11"])
+    response = admin_client.get(reverse("log"))
+    by_verdict = {e["verdict"]: e for e in response.context["entries"]}
+    assert (by_verdict["answered"]["blocked_by"], by_verdict["answered"]["limit_added"]) == ([], True)
+    assert (by_verdict["blocked"]["blocked_by"], by_verdict["blocked"]["limit_added"]) == (["R3"], False)
+    assert b"LIMIT added" in response.content
+
+
 def test_log_detail_shows_every_attempt(admin_client, conn):
     log_request(conn.id, blocked())
     entry = admin_client.get(reverse("log_detail", args=[QueryLog.objects.get().id])).context["entry"]

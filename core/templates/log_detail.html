@@ -24,6 +24,13 @@
   {% for flag in entry.anomaly_flags %}<span class="flag warn">{{ flag }}</span>{% endfor %}
 </div>
 
+{% if entry.message %}
+  <section class="notice" aria-label="Why it was not answered">
+    <span class="eyebrow">Shown to the user</span>
+    <p>{{ entry.message }}</p>
+  </section>
+{% endif %}
+
 {% if entry.plan %}
   <section class="notice" aria-label="Plan">
     <span class="eyebrow">Split into steps</span>
@@ -55,7 +62,7 @@
         {% if a.error %}<span class="error">{{ a.error }}</span>{% endif %}
       </li>
     {% empty %}
-      <li class="muted">No attempts: the AI service did not respond.</li>
+      <li class="muted">No attempts: nothing was sent to the database.</li>
     {% endfor %}
   </ol>
 </section>

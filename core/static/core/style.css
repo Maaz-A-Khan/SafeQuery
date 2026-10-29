@@ -172,6 +172,15 @@ h1, h2, p, pre, dl, dd { margin: 0; }
 .result { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
 .result > .slip { flex: 1 1 420px; }
 .result > .result-side { flex: 1.2 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+/* An answer's table needs the full width: the SQL slip goes on top, the rows below it. */
+.result.answered > .slip, .result.answered > .result-side { flex: 1 1 100%; }
+.result.answered > .slip { min-height: 0; }
+/* full width leaves room for the stamp beside the SQL instead of under it */
+.result.answered > .slip:has(> .stamp) { padding-bottom: 28px; padding-right: 240px; }
+.result.answered > .slip:has(> .stamp) > .slip-head { margin-right: -216px; }   /* header still spans the slip */
+@media (max-width: 640px) {
+  .result.answered > .slip:has(> .stamp) { padding-right: 24px; padding-bottom: 96px; }
+}
 
 .result-side h2 { font-size: 24px; font-weight: 600; line-height: 1.3; }
 .result-side .lead { font-size: 19px; line-height: 1.5; }
@@ -247,6 +256,7 @@ h1, h2, p, pre, dl, dd { margin: 0; }
 .stamp.neutral { color: var(--muted); }
 
 .stamp.small { border-width: 3px; padding: 1px 8px 0; transform: rotate(-4deg); }
+.result-side > .stamp { align-self: flex-start; }   /* a flex column would stretch it to full width */
 .stamp.small .stamp-word { font-size: 18px; }
 
 /* --- Tables ------------------------------------------------------------------ */
@@ -400,6 +410,7 @@ input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var
 .log-table .question .muted { font-size: 13px; }
 .log-table .mono { font-size: 12px; white-space: nowrap; }
 .flag { font-size: 12px; border: 1px solid var(--muted); border-radius: 3px; padding: 2px 6px; white-space: nowrap; display: inline-block; margin: 0 4px 4px 0; }
+.rewrite-tag { display: block; font-size: 11px; white-space: nowrap; }
 .flag.warn { border-color: var(--refused); color: var(--refused); }
 
 /* --- Login ------------------------------------------------------------------- */

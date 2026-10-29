@@ -120,6 +120,7 @@ def log_request(connection_id: int, result: Result) -> int | None:
             attempts_json=[json.loads(json.dumps(asdict(a))) for a in result.attempts],
             verdict=result.outcome.value,
             stopped_by=result.stopped_by.value,
+            message=result.message,
             from_cache=result.from_cache,
             rules_fired=result.rules_fired,
             attempt_count=result.attempt_count,

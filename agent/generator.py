@@ -61,7 +61,9 @@ Question: {question}
 Reply with JSON only:
 {{"sql": "<query>", "explanation": "<one sentence>"}}
 If the question cannot be answered with this schema, set sql to null
-and say why in explanation.{plan_option}"""
+and say why in explanation. Never substitute a different column or table for
+one the question asks about: some are withheld, so if a column is not listed,
+set sql to null and say which information is not available.{plan_option}"""
 
 # Planning is offered only on the first call for the user's own question, so a
 # simple question costs one Gemini call (free tier: 5 requests a minute, D-038).
@@ -118,7 +120,7 @@ def _call(prompt: str, config: GeminiConfig) -> str:
         code = getattr(exc, "code", None)
         logger.warning("Gemini request failed (%s): %s", code, str(exc)[:300])
         if code == 429:
-            raise ModelUnavailable("The AI service's free-tier limit was reached. Try again shortly.") from exc
+            raise ModelUnavailable(_quota_message(exc)) from exc
         if code == 404:
             raise ModelUnavailable(f"The Gemini model {config.model!r} is not available to this API key. "
                                    "Check GEMINI_MODEL in .env.") from exc
@@ -133,6 +135,16 @@ def _call(prompt: str, config: GeminiConfig) -> str:
     if not text:
         raise ModelUnavailable("The AI service returned an empty answer.")
     return text
+
+
+def _quota_message(exc) -> str:
+    """Which free-tier limit a 429 hit: Google names the quota in the error details."""
+    details = (getattr(exc, "details", None) or {}).get("error", {}).get("details", [])
+    quota_ids = [v.get("quotaId", "") for d in details if isinstance(d, dict) for v in d.get("violations", [])]
+    if any("PerDay" in q for q in quota_ids):
+        return ("The AI service's daily free-tier limit was reached. "
+                "It resets at midnight Pacific time (12 to 1 pm in Pakistan).")
+    return "The AI service's per-minute free-tier limit was reached. Try again in a minute."
 
 
 def _parse_json(text: str) -> dict:

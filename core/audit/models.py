@@ -29,6 +29,7 @@ class QueryLog(models.Model):
         max_length=10, choices=[(s.value, s.value) for s in StoppedBy], default=StoppedBy.NONE.value
     )                                                         # D-007
     from_cache = models.BooleanField(default=False)
+    message = models.TextField(blank=True, default="")         # why it was not answered, as shown to the user
     rules_fired = models.JSONField(default=list)
     attempt_count = models.IntegerField(default=0)
     rows_returned = models.IntegerField(null=True, blank=True)  # null if not executed

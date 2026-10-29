@@ -65,7 +65,7 @@ class ExecutorConfig:
 
 @dataclass(frozen=True)
 class GeminiConfig:
-    model: str = "gemini-3.6-flash"    # D-027
+    model: str = "gemini-3.5-flash-lite"   # D-040
     temperature: float = 0.0
     max_attempts: int = 3              # FR-Q5, NFR-R2: per step
     max_plan_steps: int = 4            # FR-Q8

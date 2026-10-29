@@ -30,7 +30,7 @@
   <table class="data-table log-table">
     <thead>
       <tr>
-        <th>When</th><th>Question</th><th>Verdict</th><th>Rules</th>
+        <th>When</th><th>Question</th><th>Verdict</th><th>Blocked by</th>
         <th class="num">Attempts</th><th class="num">Rows</th><th class="num">ms</th><th>Flags</th>
       </tr>
     </thead>
@@ -42,9 +42,10 @@
             <a href="{% url 'log_detail' e.id %}">{{ e.question }}</a>
             <span class="muted">{{ e.connection_name }} ·
               {% if e.stopped_by == "validator" %}stopped by the validator
-              {% elif e.stopped_by == "model" %}Gemini found no answer in this schema
-              {% elif e.stopped_by == "database" %}the database refused every attempt
-              {% elif e.stopped_by == "service" %}the AI service was unavailable
+              {% elif e.stopped_by == "model" %}Gemini wrote no query
+              {% elif e.stopped_by == "database" and e.attempt_count %}the database returned an error on every attempt
+              {% elif e.stopped_by == "database" %}the database could not be reached
+              {% elif e.stopped_by == "service" %}no answer from the AI service
               {% elif e.from_cache %}SQL reused from the cache
               {% elif e.attempt_count > 1 %}corrected after a database error
               {% else %}answered first time{% endif %}</span>
@@ -55,7 +56,7 @@
             {% elif e.stopped_by == "model" %}<span class="stamp small neutral"><span class="stamp-word">NO ANSWER</span></span>
             {% else %}<span class="stamp small neutral"><span class="stamp-word">FAILED</span></span>{% endif %}
           </td>
-          <td class="mono">{{ e.rules_fired|join:" "|default:"none" }}</td>
+          <td class="mono">{% if e.blocked_by %}{{ e.blocked_by|join:" " }}{% elif not e.limit_added %}—{% endif %}{% if e.limit_added %}<span class="muted rewrite-tag">LIMIT added</span>{% endif %}</td>
           <td class="num">{{ e.attempt_count }}</td>
           <td class="num">{{ e.rows_returned|default_if_none:"—" }}</td>
           <td class="num">{{ e.exec_ms|default_if_none:"—" }}</td>
