@@ -437,7 +437,9 @@ _ALIASES: dict[str, frozenset[str]] = {
 }
 
 # Syntax that sqlglot represents as a function node but that is not a function call.
-_STRUCTURAL = _node_classes("Exists", "Any", "All", "Array")
+# `Connector` is AND, OR and XOR, which sqlglot 30 makes `Func` subclasses; without
+# it every WHERE with two conditions was blocked. Their operands are still checked.
+_STRUCTURAL = _node_classes("Exists", "Any", "All", "Array", "Connector")
 _ANONYMOUS = _node_classes("Anonymous", "AnonymousAggFunc")
 
 _OUTFILE = re.compile(r"\binto\s+(outfile|dumpfile)\b", re.IGNORECASE)

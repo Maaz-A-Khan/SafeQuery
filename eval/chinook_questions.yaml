@@ -1,10 +1,193 @@
 # Correctness benchmark (Phase 7, Maaz). 30 questions: 10 easy, 10 medium, 10 hard.
 # reference_sql is PostgreSQL Chinook (snake_case tables: track, invoice_line, ...).
-# Run every reference query once to confirm it before adding it.
-# A question is correct when the agent's rows equal the reference rows, compared as sorted rows.
+# Every reference query was run on Chinook v1.4.5 (invoices 2021-01-01 to 2025-12-22) on
+# 2026-10-29: each returns under 1000 rows and no top-N question has a tie at its cut-off.
+# A question is correct when the agent's rows equal the reference rows, compared as sorted
+# rows, ignoring column names and order, numbers rounded to 2 decimals (Evaluation Plan).
+# Questions name the columns they want, because an extra column makes an answer wrong.
+# None needs a restricted column (customer.email, customer.phone, employee.phone).
 
 questions:
+  # --- easy: one table, filter or sort ---------------------------------------------------
   - id: E01
     tier: easy            # easy | medium | hard
     question: How many tracks are there?
     reference_sql: SELECT COUNT(*) FROM track
+  - id: E02
+    tier: easy
+    question: How many customers are from Brazil?
+    reference_sql: SELECT COUNT(*) FROM customer WHERE country = 'Brazil'
+  - id: E03
+    tier: easy
+    question: List the names of all media types.
+    reference_sql: SELECT name FROM media_type
+  - id: E04
+    tier: easy
+    question: What is the name of the longest track?
+    reference_sql: SELECT name FROM track ORDER BY milliseconds DESC LIMIT 1
+  - id: E05
+    tier: easy
+    question: List the first and last names of the employees whose title is Sales Support Agent.
+    reference_sql: SELECT first_name, last_name FROM employee WHERE title = 'Sales Support Agent'
+  - id: E06
+    tier: easy
+    question: How many invoices have a total greater than 20?
+    reference_sql: SELECT COUNT(*) FROM invoice WHERE total > 20
+  - id: E07
+    tier: easy
+    question: What is the sum of all invoice totals?
+    reference_sql: SELECT SUM(total) FROM invoice
+  - id: E08
+    tier: easy
+    question: How many albums have a title that starts with the word "The"?
+    reference_sql: SELECT COUNT(*) FROM album WHERE title LIKE 'The %'
+  - id: E09
+    tier: easy
+    question: Which cities in Canada have customers? List each city once.
+    reference_sql: SELECT DISTINCT city FROM customer WHERE country = 'Canada'
+  - id: E10
+    tier: easy
+    question: What is the average track length in seconds, rounded to 2 decimal places?
+    reference_sql: SELECT ROUND(AVG(milliseconds) / 1000.0, 2) FROM track
+
+  # --- medium: joins and aggregates ------------------------------------------------------
+  - id: M01
+    tier: medium
+    question: How many tracks does each genre have? Show the genre name and the track count.
+    reference_sql: >-
+      SELECT g.name, COUNT(t.track_id) FROM genre g
+      LEFT JOIN track t ON t.genre_id = g.genre_id GROUP BY g.genre_id, g.name
+  - id: M02
+    tier: medium
+    question: Which 3 artists have the most albums? Show the artist name and the album count.
+    reference_sql: >-
+      SELECT ar.name, COUNT(*) AS albums FROM artist ar JOIN album al ON al.artist_id = ar.artist_id
+      GROUP BY ar.artist_id, ar.name ORDER BY albums DESC LIMIT 3
+  - id: M03
+    tier: medium
+    question: What are the total sales for each billing country? Show the country and the total.
+    reference_sql: SELECT billing_country, SUM(total) FROM invoice GROUP BY billing_country
+  - id: M04
+    tier: medium
+    question: List the names of the tracks on the album "Let There Be Rock".
+    reference_sql: >-
+      SELECT t.name FROM track t JOIN album al ON al.album_id = t.album_id
+      WHERE al.title = 'Let There Be Rock'
+  - id: M05
+    tier: medium
+    question: >-
+      How many customers does each support representative look after? Show the employee's
+      first name, last name and the number of customers.
+    reference_sql: >-
+      SELECT e.first_name, e.last_name, COUNT(*) FROM employee e
+      JOIN customer c ON c.support_rep_id = e.employee_id GROUP BY e.employee_id, e.first_name, e.last_name
+  - id: M06
+    tier: medium
+    question: >-
+      Which 3 customers have spent the most in total? Show their first name, last name and
+      total spent.
+    reference_sql: >-
+      SELECT c.first_name, c.last_name, SUM(i.total) AS spent FROM customer c
+      JOIN invoice i ON i.customer_id = c.customer_id
+      GROUP BY c.customer_id, c.first_name, c.last_name ORDER BY spent DESC LIMIT 3
+  - id: M07
+    tier: medium
+    question: >-
+      Which albums have more than 20 tracks? Show the album title and its number of tracks.
+    reference_sql: >-
+      SELECT al.title, COUNT(*) FROM album al JOIN track t ON t.album_id = al.album_id
+      GROUP BY al.album_id, al.title HAVING COUNT(*) > 20
+  - id: M08
+    tier: medium
+    question: >-
+      What is the average unit price of tracks for each media type? Show the media type name
+      and the average price.
+    reference_sql: >-
+      SELECT m.name, AVG(t.unit_price) FROM media_type m
+      JOIN track t ON t.media_type_id = m.media_type_id GROUP BY m.media_type_id, m.name
+  - id: M09
+    tier: medium
+    question: How many invoices were issued in each year? Show the year and the count.
+    reference_sql: >-
+      SELECT EXTRACT(YEAR FROM invoice_date), COUNT(*) FROM invoice
+      GROUP BY EXTRACT(YEAR FROM invoice_date)
+  - id: M10
+    tier: medium
+    question: >-
+      Which 4 artists have the most tracks? Show the artist name and the number of tracks.
+    reference_sql: >-
+      SELECT ar.name, COUNT(*) AS tracks FROM artist ar
+      JOIN album al ON al.artist_id = ar.artist_id JOIN track t ON t.album_id = al.album_id
+      GROUP BY ar.artist_id, ar.name ORDER BY tracks DESC LIMIT 4
+
+  # --- hard: subqueries, date ranges, several joins ---------------------------------------
+  - id: H01
+    tier: hard
+    question: How many tracks have never been sold?
+    reference_sql: >-
+      SELECT COUNT(*) FROM track t
+      WHERE NOT EXISTS (SELECT 1 FROM invoice_line il WHERE il.track_id = t.track_id)
+  - id: H02
+    tier: hard
+    question: How many artists have no albums?
+    reference_sql: >-
+      SELECT COUNT(*) FROM artist ar
+      WHERE NOT EXISTS (SELECT 1 FROM album al WHERE al.artist_id = ar.artist_id)
+  - id: H03
+    tier: hard
+    question: What were the total sales in the first quarter (January to March) of 2023?
+    reference_sql: >-
+      SELECT SUM(total) FROM invoice
+      WHERE invoice_date >= '2023-01-01' AND invoice_date < '2023-04-01'
+  - id: H04
+    tier: hard
+    question: >-
+      Which customers spent more in total than the average customer? Show their first and
+      last names.
+    reference_sql: >-
+      SELECT c.first_name, c.last_name FROM customer c JOIN invoice i ON i.customer_id = c.customer_id
+      GROUP BY c.customer_id, c.first_name, c.last_name
+      HAVING SUM(i.total) > (SELECT AVG(s) FROM (SELECT SUM(total) AS s FROM invoice GROUP BY customer_id) x)
+  - id: H05
+    tier: hard
+    question: >-
+      For each employee who has a manager, show the employee's first and last name and the
+      manager's first and last name.
+    reference_sql: >-
+      SELECT e.first_name, e.last_name, m.first_name, m.last_name FROM employee e
+      JOIN employee m ON m.employee_id = e.reports_to
+  - id: H06
+    tier: hard
+    question: Which genre earned the most revenue from track sales? Show the genre name and the revenue.
+    reference_sql: >-
+      SELECT g.name, SUM(il.unit_price * il.quantity) AS revenue FROM genre g
+      JOIN track t ON t.genre_id = g.genre_id JOIN invoice_line il ON il.track_id = t.track_id
+      GROUP BY g.genre_id, g.name ORDER BY revenue DESC LIMIT 1
+  - id: H07
+    tier: hard
+    question: How many Jazz tracks are longer than the average length of all tracks?
+    reference_sql: >-
+      SELECT COUNT(*) FROM track t JOIN genre g ON g.genre_id = t.genre_id
+      WHERE g.name = 'Jazz' AND t.milliseconds > (SELECT AVG(milliseconds) FROM track)
+  - id: H08
+    tier: hard
+    question: >-
+      Which month of 2023 had the highest sales? Show the month number and the total sales.
+    reference_sql: >-
+      SELECT EXTRACT(MONTH FROM invoice_date) AS month, SUM(total) AS sales FROM invoice
+      WHERE invoice_date >= '2023-01-01' AND invoice_date < '2024-01-01'
+      GROUP BY EXTRACT(MONTH FROM invoice_date) ORDER BY sales DESC LIMIT 1
+  - id: H09
+    tier: hard
+    question: How many different customers bought at least one track from the genre with the most tracks?
+    reference_sql: >-
+      SELECT COUNT(DISTINCT i.customer_id) FROM invoice i
+      JOIN invoice_line il ON il.invoice_id = i.invoice_id JOIN track t ON t.track_id = il.track_id
+      WHERE t.genre_id = (SELECT genre_id FROM track GROUP BY genre_id ORDER BY COUNT(*) DESC LIMIT 1)
+  - id: H10
+    tier: hard
+    question: How many customers made no purchase in 2025?
+    reference_sql: >-
+      SELECT COUNT(*) FROM customer c WHERE NOT EXISTS (
+        SELECT 1 FROM invoice i WHERE i.customer_id = c.customer_id
+        AND i.invoice_date >= '2025-01-01' AND i.invoice_date < '2026-01-01')
